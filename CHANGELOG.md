@@ -22,6 +22,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   executed, and the exhausted goal still refuses further spending. The
   message says to end the goal, since a budget cannot be raised after the
   goal is created.
+- **`python agent/api_server.py` starts the server again**. Run as a script,
+  the module was registered only as `__main__`, while the route modules look
+  their host up as `api_server`; `register_runs_routes` raised `RuntimeError`
+  before the server, or even `--help`, could start. The script now registers
+  itself under that name first. `vibe-trading serve` was not affected.
 
 ## [0.1.18] — 2026-10-21
 

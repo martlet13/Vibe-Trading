@@ -21,8 +21,15 @@ from rich.console import Console
 from cli._version import __version__ as APP_VERSION
 from src.ui_services import build_run_analysis, load_run_context  # noqa: F401
 
-# UTF-8 on Windows
 import sys as _sys
+
+# Route modules resolve this host through sys.modules["api_server"]. Run as a
+# script (`python agent/api_server.py`), the module is registered only as
+# __main__ and every register_*_routes call below raises; alias it first.
+if __name__ == "__main__":
+    _sys.modules.setdefault("api_server", _sys.modules[__name__])
+
+# UTF-8 on Windows
 for _s in ("stdout", "stderr"):
     _r = getattr(getattr(_sys, _s, None), "reconfigure", None)
     if callable(_r):
