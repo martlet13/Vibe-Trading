@@ -765,21 +765,27 @@ def test_binance_positions_replace_ld_wrappers_with_simple_earn(monkeypatch) -> 
             assert params == {"size": 100}
             return {"rows": [{"asset": "BTC", "totalAmount": "1.0"}]}
 
+        def fetch_tickers(self, symbols):
+            assert symbols == ["BTC/USDT"]
+            return {"BTC/USDT": {"last": 60000.0}}
+
     monkeypatch.setattr(bn, "_exchange", lambda _cfg: FakeExchange())
     result = bn.get_positions(
         bn.BinanceConfig(api_key="key", api_secret="secret", profile="live-readonly")
     )
 
     assert result["positions"] == [
-        {"symbol": "USDT", "quantity": 12.0, "free": 12.0, "used": 0.0, "source": "spot"},
+        {"symbol": "USDT", "quantity": 12.0, "free": 12.0, "used": 0.0, "source": "spot", "value_usd": 0.0},
         {
             "symbol": "BTC",
             "quantity": 1.0,
             "free": 0.0,
             "used": 1.0,
             "source": "simple_earn_flexible",
+            "value_usd": 60000.0,
         },
     ]
+    assert "note" not in result
 
 
 def test_binance_exchange_adjusts_for_server_time(monkeypatch) -> None:
@@ -908,6 +914,8 @@ def test_binance_positions_resyncs_simple_earn_read(monkeypatch) -> None:
     assert result["positions"] == [
         {"symbol": "BTC", "quantity": 1.0, "free": 0.0, "used": 1.0, "source": "simple_earn_flexible"}
     ]
+    # This double has no ticker read: the holding stays unvalued and says so.
+    assert "USDT prices unavailable" in result["note"]
 
 
 # --------------------------------------------------------------------------- #
@@ -1293,3 +1301,24 @@ def test_mt5_instrument_search_refuses_executable_override(monkeypatch):
     result = service.search_instruments("XAUUSD", "mt5-paper-sdk", terminal_path="C:/arbitrary.exe")
     assert result["status"] == "error"
     assert result["instruments"] == []
+
+
+def test_binance_positions_leave_an_unpriced_holding_unvalued(monkeypatch) -> None:
+    class FakeExchange:
+        def fetch_balance(self):
+            return {
+                "USDC": {"free": 5, "used": 0, "total": 5},
+                "ETH": {"free": 2, "used": 0, "total": 2},
+                "DUST": {"free": 9, "used": 0, "total": 9},
+            }
+
+        def fetch_tickers(self, symbols):
+            return {"ETH/USDT": {"last": 3000.0}, "DUST/USDT": {"last": None}}
+
+    monkeypatch.setattr(bn, "_exchange", lambda _cfg: FakeExchange())
+    result = bn.get_positions(bn.BinanceConfig(profile="paper"))
+
+    values = {row["symbol"]: row.get("value_usd") for row in result["positions"]}
+    assert values == {"USDC": 0.0, "ETH": 6000.0, "DUST": None}
+    assert "value_usd" not in next(r for r in result["positions"] if r["symbol"] == "DUST")
+    assert result["note"] == "No USDT price for: DUST."

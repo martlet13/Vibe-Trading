@@ -17,6 +17,7 @@ BINANCE_TOOL_CLASS: dict[str, ToolClass] = {
     "fetch_open_orders": ToolClass.READ,
     "fetch_my_trades": ToolClass.READ,
     "fetch_ticker": ToolClass.READ,
+    "fetch_tickers": ToolClass.READ,
     "fetch_ohlcv": ToolClass.READ,
     "load_markets": ToolClass.READ,
     "fapiprivatev2_get_account": ToolClass.READ,
