@@ -24,6 +24,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   0.172; strategy metrics are unchanged. Runs without a warm-up boundary also
   move, by the first bar's open-to-close.
 
+#### API server
+
+- **`python agent/api_server.py` starts the server again**. Run as a script,
+  the module was registered only as `__main__`, while the route modules look
+  their host up as `api_server`; `register_runs_routes` raised `RuntimeError`
+  before the server, or even `--help`, could start. The script now registers
+  itself under that name first. `vibe-trading serve` was not affected.
+
 ## [0.1.19] — 2026-11-05
 
 Rolls up 299 commits / 116 merged pull requests since 0.1.18, plus 21

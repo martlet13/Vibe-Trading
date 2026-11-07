@@ -13,6 +13,8 @@ build in CI) cannot satisfy or break them.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -130,3 +132,22 @@ def test_serve_mounts_frontend_when_routes_include_router_without_path(
         assert _run_serve([]) == "127.0.0.1"
     finally:
         api_server.app.routes.pop(0)
+
+
+@pytest.mark.unit
+def test_direct_script_run_registers_routes() -> None:
+    """`python agent/api_server.py` must not fail on the route-module host lookup.
+
+    Run as a script, the module lives in sys.modules only as ``__main__``;
+    register_runs_routes used to raise before argparse could even print --help.
+    """
+    script = Path(api_server.__file__).resolve()
+    result = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        cwd=script.parent.parent,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--port" in result.stdout
