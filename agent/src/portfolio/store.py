@@ -9,12 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from src.config.paths import get_runtime_root
+from src.portfolio.normalization import SPOT_BALANCE_BROKERS
 
 
 def _derived_totals_are_complete(payload: dict[str, Any]) -> bool:
-    """Reject snapshots whose derived Binance total omitted an unpriced asset."""
+    """Reject snapshots whose derived spot-balance total omitted an unpriced asset."""
     for account in payload.get("accounts", []):
-        if account.get("broker") != "binance":
+        if account.get("broker") not in SPOT_BALANCE_BROKERS:
             continue
         unpriced_count = account.get("unpriced_position_count")
         if unpriced_count is not None:
@@ -22,9 +23,10 @@ def _derived_totals_are_complete(payload: dict[str, Any]) -> bool:
                 return False
             continue
         # Compatibility for snapshots written before account-level counts were
-        # stored: only Binance positions affect a derived account total.
+        # stored: only that broker's positions affect its derived total.
+        broker = account.get("broker")
         if any(
-            row.get("broker") == "binance" and not row.get("priced")
+            row.get("broker") == broker and not row.get("priced")
             for row in payload.get("positions", [])
         ):
             return False

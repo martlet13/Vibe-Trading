@@ -200,7 +200,7 @@ run from a clone (`pip install -e .`).
 </details>
 
 <details>
-<summary><b>Broker Connectors</b> <sub>19 brokers — read + paper, bounded-live where supported</sub></summary>
+<summary><b>Broker Connectors</b> <sub>20 brokers — read + paper, bounded-live where supported</sub></summary>
 
 Connector-first profiles. Most do read + paper-account order placement — IBKR is read-only, Robinhood is live-only (no paper account), Scalable Capital is read-only (no paper account exists at all), mStock (India) is read-only live over its Type B REST API (no paper account), and Trading 212 and Toss Securities refuse order placement entirely, paper included; live order placement is bounded by a user-defined mandate (symbol allowlist, order-size / exposure caps, daily trade cap, instant kill switch) and never holds funds — the broker executes. Order-placing tools stay off MCP (agent + CLI only). Research / backtest paths are structurally barred from any live endpoint.
 
@@ -212,7 +212,7 @@ Connector-first profiles. Most do read + paper-account order placement — IBKR 
 | **mStock** | India (NSE/BSE) | Separate holdings/net-position reads; no portfolio aggregation or orders |
 | **Tiger** | US / HK / A | read + paper + bounded live |
 | **Alpaca** | US | read + paper + bounded live (+ TAP credential-isolation mode) |
-| **OKX** · **Binance** | crypto | read + paper + bounded live |
+| **OKX** · **Binance** · **Bybit** | crypto | read + paper + bounded live (Bybit: spot only; testnet ⇔ paper host guard) |
 | **Futu** | HK / US / A | read + paper + bounded live |
 | **eToro** | global | read + paper + bounded live (Public API; demo keys reach only `/demo` paths, plus copy-trading workflows) |
 | **MetaTrader 5** | forex / CFD | read + paper + bounded live (Exness-style; demo ⇔ paper identity guard) |

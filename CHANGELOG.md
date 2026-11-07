@@ -5,6 +5,21 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Bybit spot connector**. Four `ccxt` profiles — `bybit-paper-sdk` and
+  `bybit-live-sdk-readonly` (read-only), `bybit-paper-trade` (testnet orders)
+  and `bybit-live-trade` (live orders behind the mandate and kill switch) —
+  read balances, open orders, quotes and bars and place or cancel spot market
+  and limit orders. Paper and live are host-separated: before every call the
+  client's own resolved endpoints must match `api-testnet.bybit.com` for paper
+  or `api.<hostname>` for live, so a sandbox switch that did not apply fails
+  closed. Regional mainnet sites (`bybit.eu`, `bybit.nl`, …) are an explicit
+  allowlist. Each holding reports its USDT value to the live gate, with
+  stablecoin cash counted as no exposure; a holding without a USDT price makes
+  the gate refuse live orders. Derivatives are not traded, and portfolio
+  support is experimental (spot balances only). The broker count is now 20.
+
 ### Fixed
 
 #### Live trading

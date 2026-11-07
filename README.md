@@ -85,7 +85,7 @@
 
 <div align="center">
 <a href="assets/feature-market-research-card.svg"><img src="assets/feature-market-research-card.svg" width="50%" alt="🔍 Market Research: Explore prices, filings and ETF holdings; Value companies with DCF and peer multiples; Track earnings and schedule a premarket brief."/></a><a href="assets/feature-research-teams-card.svg"><img src="assets/feature-research-teams-card.svg" width="50%" alt="🐝 Research Teams: 30 preset teams for equities, quant, crypto and risk; Follow the bull case, bear case and risk review; Assign research tasks in Pixel Office."/></a><br/>
-<a href="assets/feature-quant-lab-card.svg"><img src="assets/feature-quant-lab-card.svg" width="50%" alt="📊 Quant Lab: Benchmark 478 alphas across five libraries; Backtest across markets and test out of sample; Model options payoffs, Greeks and portfolio risk."/></a><a href="assets/feature-trading-portfolio-card.svg"><img src="assets/feature-trading-portfolio-card.svg" width="50%" alt="👥 Trading &amp; Portfolio: 19 broker connectors with per-broker permissions; Track paper fills or set limits for supported live trades; Replay your own trading rules with Shadow Account."/></a>
+<a href="assets/feature-quant-lab-card.svg"><img src="assets/feature-quant-lab-card.svg" width="50%" alt="📊 Quant Lab: Benchmark 478 alphas across five libraries; Backtest across markets and test out of sample; Model options payoffs, Greeks and portfolio risk."/></a><a href="assets/feature-trading-portfolio-card.svg"><img src="assets/feature-trading-portfolio-card.svg" width="50%" alt="👥 Trading &amp; Portfolio: 20 broker connectors with per-broker permissions; Track paper fills or set limits for supported live trades; Replay your own trading rules with Shadow Account."/></a>
 </div>
 
 ## 💡 What Is Vibe-Trading?
@@ -192,6 +192,7 @@ Yes indicates a declared capability. A dash means no matching profile is declare
 | --- | :---: | :---: | :---: |
 | alpaca | Yes | Yes | Yes |
 | binance | Yes | Yes | Yes |
+| bybit | Yes | Yes | Yes |
 | dhan | Yes | Yes | — |
 | etoro | Yes | Yes | Yes |
 | futu | Yes | Yes | Yes |

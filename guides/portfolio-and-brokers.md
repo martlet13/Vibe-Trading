@@ -88,6 +88,10 @@ use a broker sandbox or local simulation. See each profile's notes and the
 | `binance-live-trade` | binance | live | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place.requires_mandate` | mandate required |
 | `binance-paper-sdk` | binance | paper | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
 | `binance-paper-trade` | binance | paper | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place` | no mandate declared |
+| `bybit-live-sdk-readonly` | bybit | live | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
+| `bybit-live-trade` | bybit | live | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place.requires_mandate` | mandate required |
+| `bybit-paper-sdk` | bybit | paper | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
+| `bybit-paper-trade` | bybit | paper | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place` | no mandate declared |
 | `dhan-live-sdk-readonly` | dhan | live | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
 | `dhan-paper-sdk` | dhan | paper | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
 | `dhan-paper-trade` | dhan | paper | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place` | no mandate declared |
@@ -240,6 +244,55 @@ vibe-trading connector quote BTC
 Symbol lookup uses eToro's `internalSymbolFull` search (e.g. `BTC` → instrument id `100000`). Use the `etoro_search_instruments` agent tool to resolve tickers before trading.
 
 Safety boundary: demo and real are path-separated and key-bound (`paper_guard: path_separated_key_bound`). Live risk-increasing actions (open and copy-start/increase) require an authorized mandate, a clear halt state, and a verified USD account for copy-notional enforcement. Validated full and partial position closes, open-order cancellation, and copy close remain available when halted and are audit-logged. Cancelling a pending close or editing position stops is paper-only: the live path fails closed because those operations can increase exposure or transfer extra margin without enough API data to quantify the incremental USD risk. Copy amounts are denominated in the eToro account currency, and every copy start/adjust requires a caller-supplied 1-35 character URL-safe reference id for polling. eToro-specific write tools (`etoro_close_position`, `etoro_copy_*`, etc.) are agent tools only — not exposed via MCP or CLI. Rollback: revert the connector commit(s) or disable profiles; halt blocks new live risk-increasing actions.
+
+## 🔌 Bybit Spot Connector
+
+Connects to Bybit's V5 API through `ccxt` (`pip install ccxt keyring`) for spot
+trading only; derivatives are never selected. Testnet and mainnet use different
+keys and different hosts: a paper profile must resolve every endpoint to
+`api-testnet.bybit.com`, a live profile to `api.<hostname>`, and the connector
+checks the client's own resolved URLs before every call.
+
+Create a testnet key at [testnet.bybit.com](https://testnet.bybit.com/) first.
+Use a system-generated HMAC key, grant Spot Trade only for the trading profiles,
+and never enable Withdraw. Configure `~/.vibe-trading/bybit.json` (create it
+yourself; `chmod 600` where supported), or store the key pair in the OS keyring
+with `vibe-trading connector setup`:
+
+```json
+{
+  "api_key": "YOUR_API_KEY",
+  "api_secret": "YOUR_API_SECRET",
+  "profile": "paper"
+}
+```
+
+A live account on a regional Bybit site adds `"hostname"`: one of `bybit.com`
+(default), `bytick.com`, `bybit.eu`, `bybit.nl`, `bybit.com.hk` or `bybit.kz`.
+The testnet exists only under `bybit.com`.
+
+```bash
+vibe-trading connector use bybit-paper-trade
+vibe-trading connector check
+vibe-trading connector account
+vibe-trading connector quote BTC-USDT
+```
+
+| Profile | Account | Orders |
+|---------|---------|--------|
+| `bybit-paper-sdk` | testnet | read-only |
+| `bybit-live-sdk-readonly` | mainnet | read-only |
+| `bybit-paper-trade` | testnet | direct placement on the testnet host |
+| `bybit-live-trade` | mainnet | mandate + kill-switch gated |
+
+Orders take a base-asset `quantity` or, for market orders, a quote-asset
+`notional` (Bybit sizes it in the quote coin on both sides); limit orders accept
+`day`/`gtc` (both GTC), `ioc` and `fok`. For the live gate each holding carries
+its USDT value; stablecoin balances count as cash, not exposure. A holding with
+no `<ASSET>/USDT` price makes the gate refuse new live orders until it is sold
+or priced. Order symbols are matched against holdings by spelling, so selling an
+existing coin is counted conservatively as new exposure. Portfolio support is
+experimental: Earn, funding-account and derivatives balances are not read.
 
 ### Trading connectors: fastest path
 

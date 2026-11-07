@@ -82,6 +82,19 @@ _BUILTIN: dict[str, ConnectorOnboarding] = {
         install_command="pip install ccxt keyring",
         setup_hint="Create a read-only Spot API key; do not enable withdrawals.",
     ),
+    "bybit": ConnectorOnboarding(
+        auth_type="api_key",
+        credential_fields=(
+            _field("api_key", "API Key"),
+            _field("api_secret", "API Secret"),
+        ),
+        dependency="ccxt",
+        install_command="pip install ccxt keyring",
+        setup_hint=(
+            "Create a system-generated HMAC key; grant Spot Trade only for trading "
+            "profiles and never Withdraw. Testnet keys come from testnet.bybit.com."
+        ),
+    ),
     "dhan": ConnectorOnboarding(
         auth_type="access_token",
         credential_fields=(
