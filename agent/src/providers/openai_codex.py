@@ -692,6 +692,12 @@ def _message_chunks_from_events(events: Iterable[dict[str, Any]]) -> Iterable[Co
                 }
                 if all(isinstance(value, int) and not isinstance(value, bool) for value in values.values()):
                     usage_metadata = values
+                    cached = (usage.get("input_tokens_details") or {}).get("cached_tokens")
+                    reasoning = (usage.get("output_tokens_details") or {}).get("reasoning_tokens")
+                    if isinstance(cached, int):
+                        usage_metadata["input_token_details"] = {"cache_read": cached}
+                    if isinstance(reasoning, int):
+                        usage_metadata["output_token_details"] = {"reasoning": reasoning}
             yield CodexAIMessage(
                 response_metadata=response_metadata,
                 usage_metadata=usage_metadata,
@@ -758,7 +764,7 @@ class OpenAICodexLLM:
         tools = _convert_tools(self.tools)
         if tools:
             body["tools"] = tools
-        if self.reasoning_effort and self.reasoning_effort.lower() != "none":
+        if self.reasoning_effort:
             body["reasoning"] = {"effort": self.reasoning_effort.lower()}
         return body
 

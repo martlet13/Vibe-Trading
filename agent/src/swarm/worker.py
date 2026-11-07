@@ -578,8 +578,9 @@ def run_worker(
         WorkerResult with status, summary, artifacts, and iteration count.
     """
     llm = ChatLLM(model_name=agent_spec.model_name)
+    result = None
     try:
-        return _run_worker_impl(
+        result = _run_worker_impl(
             agent_spec=agent_spec,
             task=task,
             upstream_summaries=upstream_summaries,
@@ -592,8 +593,20 @@ def run_worker(
             agent_config=agent_config,
             cancel_event=cancel_event,
         )
+        return result
     finally:
+        if result is None or result.status != "completed":
+            _worker_background(run_dir, agent_spec.id, task.id).cancel_all()
         llm.close()
+
+
+def _worker_background(run_dir: Path, agent_id: str, task_id: str):
+    """Return the canonical background handle for a worker."""
+    from src.tools.background_tools import BackgroundScope, get_background_manager
+
+    return get_background_manager().for_scope(BackgroundScope(
+        owner_id=f"swarm:{Path(run_dir).resolve()}:{agent_id}:{task_id}", attempt_id=task_id,
+    ))
 
 
 def _run_worker_impl(
@@ -662,11 +675,18 @@ def _run_worker_impl(
     #    ``load_skill`` with the allowlist baked in; an empty ``skills`` list
     #    means unrestricted, matching the prompt-side filter semantics
     #    (``_filter_skill_descriptions`` treats empty as include-all).
+    # Each worker owns its background tasks. Two workers running the same
+    # preset concurrently must never read or cancel each other's commands, and
+    # neither may see the tasks of the session that launched the swarm.
+    background = _worker_background(run_dir, agent_id, task_id)
+    background_scope = background.scope
     registry = build_swarm_registry(
         agent_spec.tools,
         agent_config=agent_config,
         include_shell_tools=include_shell_tools,
         skill_allowlist=agent_spec.skills or None,
+        background_manager=background,
+        background_scope=background_scope,
     )
 
     # 2. Build system prompt with filtered skills

@@ -24,6 +24,7 @@ from __future__ import annotations
 import csv
 import logging
 import math
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -135,6 +136,35 @@ def _resolve_columns(
     return resolved
 
 
+def _ungroup_number(text: str, grouping: str, decimal: str | None = None) -> str:
+    """Normalize declared grouping only when every digit group is valid.
+
+    Args:
+        text: Signed numeric text, optionally with a scientific exponent.
+        grouping: Group separator to remove.
+        decimal: Decimal separator, or None for a grouped integer.
+
+    Returns:
+        Numeric text using a dot decimal separator and no grouping.
+
+    Raises:
+        ValueError: Group widths are malformed or grouping occurs in a fraction.
+    """
+    parts = re.split(r"([eE][+-]?\d+)$", text, maxsplit=1)
+    mantissa = parts[0]
+    integer, separator, fraction = mantissa.partition(decimal) if decimal else (mantissa, "", "")
+    if grouping in fraction:
+        raise ValueError(f"{text!r} has digit grouping in its fractional part")
+    if grouping in integer:
+        escaped = re.escape(grouping)
+        # Western groups of three, or Indian groups of two ending in three.
+        pattern = rf"[+-]?(?:\d{{1,3}}(?:{escaped}\d{{3}})+|\d{{1,2}}(?:{escaped}\d{{2}})+{escaped}\d{{3}})"
+        if re.fullmatch(pattern, integer) is None:
+            raise ValueError(f"{text!r} has malformed digit grouping")
+    normalized = integer.replace(grouping, "") + ("." + fraction if separator else "")
+    return normalized + (parts[1] if len(parts) > 1 else "")
+
+
 def _to_plain_number(text: str, decimal_separator: str | None) -> str:
     """Reduce a grouped decimal string to a form ``float`` accepts.
 
@@ -146,6 +176,9 @@ def _to_plain_number(text: str, decimal_separator: str | None) -> str:
     Returns:
         The same number using ``.`` as the decimal separator and no grouping.
 
+    Repeated separators identify grouping only when the digit groups are valid;
+    malformed amounts are rejected rather than silently concatenated.
+
     Raises:
         ValueError: If the value uses a single comma whose role cannot be
             determined -- ``"1,234"`` is 1234 in a US export and 1.234 in a
@@ -156,18 +189,20 @@ def _to_plain_number(text: str, decimal_separator: str | None) -> str:
     """
     if decimal_separator is not None:
         grouping = "," if decimal_separator == "." else "."
-        return text.replace(grouping, "").replace(decimal_separator, ".")
+        return _ungroup_number(text, grouping, decimal_separator)
 
     has_dot = "." in text
     has_comma = "," in text
     if has_dot and has_comma:
         # The rightmost separator is the decimal one; the other groups digits.
         if text.rindex(".") > text.rindex(","):
-            return text.replace(",", "")
-        return text.replace(".", "").replace(",", ".")
+            return _ungroup_number(text, ",", ".")
+        return _ungroup_number(text, ".", ",")
+    if has_dot and text.count(".") > 1:
+        return _ungroup_number(text, ".")
     if has_comma:
         if text.count(",") > 1:
-            return text.replace(",", "")  # 1,234,567 cannot be a decimal comma
+            return _ungroup_number(text, ",")
         raise ValueError(
             f"{text!r} uses a single comma and could be either "
             f"{text.replace(',', '')} (comma groups thousands) or "

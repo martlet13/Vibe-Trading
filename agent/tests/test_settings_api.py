@@ -76,13 +76,6 @@ def test_extract_model_ids_normalizes_openai_compatible_payloads() -> None:
             {"provider": "openrouter", "base_url": "https://openrouter.ai/api/v1"},
             "api_key_required",
         ),
-        (
-            {
-                "provider": "openai-codex",
-                "base_url": "https://chatgpt.com/backend-api/codex/responses",
-            },
-            "oauth_discovery_unsupported",
-        ),
         # gh_cli used to build "gh_cli_discovery_unsupported", which the response
         # model rejects; it shares the OAuth code instead.
         ({"provider": "copilot"}, "oauth_discovery_unsupported"),
@@ -722,7 +715,7 @@ def test_update_source_orders_persists_and_hot_applies(
                     "market": "a_share",
                     "order": [
                         "tushare", "tencent", "eastmoney",
-                        "baostock", "akshare", "gildata", "local",
+                        "baostock", "akshare", "local",
                     ],
                 },
             ],
@@ -761,7 +754,7 @@ def test_update_source_orders_reset_clears_override(
                     "market": "a_share",
                     "order": [
                         "tushare", "tencent", "eastmoney",
-                        "baostock", "akshare", "gildata", "local",
+                        "baostock", "akshare", "local",
                     ],
                 },
             ],
@@ -913,3 +906,83 @@ def test_other_providers_still_reject_xhigh(client: TestClient) -> None:
     response = client.put("/settings/llm", json=payload)
 
     assert response.status_code == 400
+
+
+def test_codex_model_discovery_uses_fixed_oauth_catalog_not_form_url(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = []
+
+    async def fake_catalog(provider):
+        called.append(provider.name)
+        return settings_routes.LLMModelsResponse(
+            provider=provider.name,
+            models=["openai-codex/gpt-6-sol"],
+            source="provider",
+            model_labels={"openai-codex/gpt-6-sol": "GPT-6 Sol"},
+            effort_levels={"openai-codex/gpt-6-sol": ["low", "medium", "ultra"]},
+            default_effort_levels={"openai-codex/gpt-6-sol": "medium"},
+        )
+
+    monkeypatch.setattr(settings_routes, "_list_openai_codex_models", fake_catalog)
+    response = client.post(
+        "/settings/llm/models",
+        json={
+            "provider": "openai-codex",
+            "base_url": "https://untrusted.example/should-not-receive-token",
+            "api_key": "untrusted-form-value",
+        },
+    )
+    assert response.status_code == 200
+    assert called == ["openai-codex"]
+    assert response.json()["models"] == ["openai-codex/gpt-6-sol"]
+    assert response.json()["model_labels"]["openai-codex/gpt-6-sol"] == "GPT-6 Sol"
+    assert response.json()["effort_levels"]["openai-codex/gpt-6-sol"] == ["low", "medium", "ultra"]
+    assert response.json()["default_effort_levels"]["openai-codex/gpt-6-sol"] == "medium"
+
+
+def test_gildata_upgrade_and_feature_isolation(client, monkeypatch, tmp_path):
+    """An old token grants none of the four capabilities until individually enabled."""
+    from src.config.gildata_features import FEATURES_ENV
+    from src.tools import gildata_identity
+    from src.tools.gildata_fin_query_tool import GildataFinQueryTool
+    from src.tools.gildata_stock_selection_tool import GildataStockSelectionTool
+    from src.tools import gildata_srv
+    from unittest.mock import Mock
+
+    monkeypatch.delenv(FEATURES_ENV, raising=False)
+    monkeypatch.setenv("GILDATA_TOKEN", "old-token")
+    (tmp_path / ".env").write_text("GILDATA_TOKEN=old-token\n")
+    vendor = Mock(return_value=[])
+    monkeypatch.setattr(gildata_identity, "_call_tool_results", vendor)
+    monkeypatch.setattr(gildata_srv, "_call_srv", vendor)
+    url = "/settings/data-sources"
+    assert client.get(url).json()["gildata_features"] == []
+    from backtest.loaders.gildata_loader import DataLoader
+
+    retained_tool = GildataFinQueryTool()
+    for index, feature in enumerate([None, "symbol_search", "fin_query", "stock_selection", "shannon", "market_quotes", None]):
+        if index:
+            selected = [feature] if feature else []
+            response = client.put(url, json={"gildata_features": selected})
+            assert response.status_code == 200
+            assert response.json()["gildata_features"] == selected
+            assert f"{FEATURES_ENV}={feature or ''}\n" in (tmp_path / ".env").read_text()
+        assert DataLoader().is_available() == (feature == "market_quotes")
+        assert retained_tool.check_available() == (feature == "fin_query")
+        assert GildataStockSelectionTool.check_available() == (feature == "stock_selection")
+        before = vendor.call_count
+        gildata_identity.search_candidates("AAPL", 5)
+        assert vendor.call_count == before + (feature == "symbol_search")
+        assert client.get("/api/shannon/status").json()["configured"] == (feature == "shannon")
+        if feature != "shannon":
+            assert client.get("/api/shannon/catalog").status_code == 503
+            assert client.post("/api/shannon/diagnosis", json={
+                "holdings": [{"code": "600000.SH"}]
+            }).status_code == 503
+        if feature != "fin_query":
+            assert '"ok": false' in retained_tool.execute(query="revenue")
+        if feature != "stock_selection":
+            assert '"ok": false' in GildataStockSelectionTool().execute(query="top stocks")
+        assert vendor.call_count == before + (feature == "symbol_search")
+    assert client.put(url, json={"gildata_features": ["*"]}).status_code == 422

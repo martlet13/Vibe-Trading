@@ -11,6 +11,7 @@ import math
 from typing import Any
 
 from src.agent.tools import BaseTool
+from src.tools._arguments import boolean_argument
 from src.trading.profiles import (
     list_profiles,
     load_selected_profile_id,
@@ -370,7 +371,7 @@ class TradingOrdersTool(BaseTool):
             return _json_result(
                 get_open_orders(
                     _connection(kwargs.get("connection")),
-                    include_executions=bool(kwargs.get("include_executions", False)),
+                    include_executions=boolean_argument(kwargs.get("include_executions", False), field="include_executions"),
                     **_overrides(kwargs),
                 )
             )
@@ -452,7 +453,7 @@ class TradingHistoryTool(BaseTool):
                     duration=str(kwargs.get("duration") or "30 D"),
                     bar_size=str(kwargs.get("bar_size") or "1 day"),
                     what_to_show=str(kwargs.get("what_to_show") or "TRADES"),
-                    use_rth=bool(kwargs.get("use_rth", True)),
+                    use_rth=boolean_argument(kwargs.get("use_rth", True), field="use_rth"),
                     period=str(kwargs.get("period") or "1d"),
                     limit=int(kwargs.get("limit") or 90),
                     **_overrides(kwargs),
@@ -1026,9 +1027,9 @@ class EtoroEditPositionStopsTool(BaseTool):
                     _connection(kwargs.get("connection")),
                     stop_loss=stop_loss,
                     take_profit=take_profit,
-                    trailing_stop_loss=bool(trailing) if trailing is not None else None,
-                    clear_stop_loss=bool(kwargs.get("clear_stop_loss", False)),
-                    clear_take_profit=bool(kwargs.get("clear_take_profit", False)),
+                    trailing_stop_loss=boolean_argument(trailing, field="trailing_stop_loss") if trailing is not None else None,
+                    clear_stop_loss=boolean_argument(kwargs.get("clear_stop_loss"), field="clear_stop_loss"),
+                    clear_take_profit=boolean_argument(kwargs.get("clear_take_profit"), field="clear_take_profit"),
                     request_id=_connection(kwargs.get("request_id")),
                     **overrides,
                 )

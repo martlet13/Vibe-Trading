@@ -190,6 +190,25 @@ def test_attribution_auto_mode_factor_and_symbol_brinson(tmp_path: Path, monkeyp
     assert any("symbol-mode" in note for note in data["notes"])
 
 
+def test_attribution_uses_executed_reference_after_explicit_fetch_failed(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    run_dir = _build_auto_run(tmp_path, "fallback")
+    _write_config(run_dir, [SYMBOL_A, SYMBOL_B], benchmark="SPY")
+    _write_metrics(run_dir, extra={"benchmark_kind": "equal_weight"})
+    data = client.get("/runs/fallback/attribution").json()
+    assert data["benchmark"] == {"ticker": None, "mode": "auto_equal_weight"}
+    assert data["brinson"]["mode"] == "symbol"
+
+
+def test_attribution_names_the_resolved_auto_ticker(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    run_dir = _build_explicit_run(tmp_path, "market")
+    _write_config(run_dir, ["600519.SH"], benchmark="auto")
+    _write_metrics(run_dir, extra={"benchmark_kind": "external", "benchmark_ticker": "000300.SH"})
+    data = client.get("/runs/market/attribution").json()
+    assert data["benchmark"] == {"ticker": "000300.SH", "mode": "auto_market"}
+
+
 def test_attribution_explicit_mode_asset_class_with_cash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(tmp_path, monkeypatch)
     _build_explicit_run(tmp_path, "attr-explicit")
@@ -422,3 +441,29 @@ def test_attribution_artifact_symbol_path_traversal_is_contained(
     assert brinson["mode"] == "symbol"
     sectors = {sector["sector"]: sector for sector in brinson["sectors"]}
     assert set(sectors) == {SYMBOL_A, "Cash"}
+
+
+def test_attribution_skips_invalid_portfolio_rows_without_shifting_benchmark_returns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+    run_dir = tmp_path / "runs" / "attr-invalid-return"
+    rng = np.random.default_rng(23)
+    benchmark = rng.normal(0.0005, 0.01, N_BARS)
+    benchmark[0] = 0.0
+    portfolio = 0.001 + 1.2 * benchmark
+    portfolio[5] = np.nan
+    dates = _trading_dates(N_BARS)
+
+    _write_equity(run_dir, dates, portfolio, benchmark)
+    _write_config(run_dir, [SYMBOL_A])
+    _write_metrics(run_dir)
+
+    response = client.get("/runs/attr-invalid-return/attribution")
+
+    assert response.status_code == 200
+    factor = response.json()["factor"]
+    assert factor is not None
+    assert factor["n_obs"] == N_BARS - 1
+    assert factor["beta"] == pytest.approx(1.2, abs=1e-8)
+    assert factor["alpha_per_period"] == pytest.approx(0.001, abs=1e-8)

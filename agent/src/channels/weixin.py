@@ -16,6 +16,7 @@ import json
 import os
 import random
 import re
+import tempfile
 import time
 import uuid
 from collections import OrderedDict
@@ -728,11 +729,7 @@ class WeixinChannel(BaseChannel):
                         has_top_level_downloadable_media = True
                     file_path = await self._download_media_item(voice_item, "voice")
                     if file_path:
-                        transcription = await self.transcribe_audio(file_path)
-                        if transcription:
-                            content_parts.append(f"[voice] {transcription}")
-                        else:
-                            content_parts.append(f"[voice]\n[Audio: source: {file_path}]")
+                        content_parts.append(f"[voice]\n[Audio: source: {file_path}]")
                         media_paths.append(file_path)
                     else:
                         content_parts.append("[voice]")
@@ -790,11 +787,7 @@ class WeixinChannel(BaseChannel):
                     voice_item = ref_media_item.get("voice_item") or {}
                     file_path = await self._download_media_item(voice_item, "voice")
                     if file_path:
-                        transcription = await self.transcribe_audio(file_path)
-                        if transcription:
-                            content_parts.append(f"[voice] {transcription}")
-                        else:
-                            content_parts.append(f"[voice]\n[Audio: source: {file_path}]")
+                        content_parts.append(f"[voice]\n[Audio: source: {file_path}]")
                         media_paths.append(file_path)
                 elif ref_type == ITEM_FILE:
                     file_item = ref_media_item.get("file_item") or {}
@@ -914,14 +907,22 @@ class WeixinChannel(BaseChannel):
 
             media_dir = get_media_dir("weixin")
             ext = _ext_for_type(media_type)
-            if not filename:
-                ts = int(time.time())
-                hash_seed = encrypt_query_param or full_url
-                h = abs(hash(hash_seed)) % 100000
-                filename = f"{media_type}_{ts}_{h}{ext}"
-            safe_name = os.path.basename(filename)
-            file_path = media_dir / safe_name
-            file_path.write_bytes(data)
+            if filename:
+                stem, orig_ext = os.path.splitext(os.path.basename(filename))
+            else:
+                stem, orig_ext = media_type, ext
+            # Exclusive creation also protects same-second retries and hash
+            # collisions; time plus a truncated URL hash is not unique.
+            with tempfile.NamedTemporaryFile(
+                dir=media_dir, prefix=f"{stem[:32]}_", suffix=orig_ext or ext, delete=False
+            ) as downloaded:
+                file_path = Path(downloaded.name)
+                try:
+                    downloaded.write(data)
+                except Exception:
+                    downloaded.close()
+                    file_path.unlink(missing_ok=True)
+                    raise
             return str(file_path)
 
         except Exception:

@@ -174,7 +174,7 @@ class AgentLoop(ToolCallLifecycle):
         registry: Tool registry.
         llm: ChatLLM client.
         memory: Workspace memory.
-        max_iterations: Maximum number of iterations.
+        max_iterations: Maximum research iterations, plus one text-only answer retry.
     """
 
     def __init__(
@@ -185,6 +185,8 @@ class AgentLoop(ToolCallLifecycle):
         event_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         max_iterations: int = 50,
         persistent_memory: Optional[Any] = None,
+        cancel_event: Optional[threading.Event] = None,
+        background_manager: Optional[Any] = None,
     ) -> None:
         """Initialize AgentLoop.
 
@@ -193,8 +195,17 @@ class AgentLoop(ToolCallLifecycle):
             llm: ChatLLM client.
             memory: Workspace memory (created fresh if not provided).
             event_callback: Event callback (event_type, data).
-            max_iterations: Maximum number of loop iterations.
+            max_iterations: Maximum research iterations, plus one text-only answer retry.
             persistent_memory: PersistentMemory for cross-session recall.
+            cancel_event: Optional cancellation flag to share with long-running
+                tools (e.g. ``run_swarm``). The host session owns the event so a
+                user stop reaches both the loop and the tools it is blocked in;
+                ``None`` keeps the loop self-contained (CLI and tests).
+            background_manager: Scoped handle over the background task table.
+                Must be the same handle the registry bound to its background
+                tools, so this loop drains the completions of its own tasks and
+                never another conversation's. Falls back to the handle the
+                registry recorded, and only then to an unowned one.
         """
         self.registry = prepare_registry(registry)
         self.llm = llm
@@ -232,7 +243,14 @@ class AgentLoop(ToolCallLifecycle):
         # Capture successful identities before context collapse can stub args.
         # Skipped/error call IDs never enter this ledger.
         self._successful_call_keys: dict[str, tuple[str, str]] = {}
-        self._cancel_event = threading.Event()
+        self._cancel_event = cancel_event if cancel_event is not None else threading.Event()
+        # Resolved once, not per iteration: an unowned handle is private to
+        # itself, so re-deriving it would silently discard this loop's results.
+        self._background_manager = (
+            background_manager
+            or getattr(registry, "background", None)
+            or get_background_manager()
+        )
         self._previous_summary: str = ""
         self._persistent_memory = persistent_memory
         self._run_iteration: int = 0
@@ -279,6 +297,10 @@ class AgentLoop(ToolCallLifecycle):
         next cooperative checkpoint instead of only at the next iteration.
         """
         self._cancel_event.set()
+        # Stop must reach commands the current or an earlier turn spawned, not
+        # only the ReAct cycle. Normal successful turns do not call cancel().
+        if self._background_manager is not None:
+            self._background_manager.cancel_all()
 
     def _write_run_manifest(self, trace_dir: "Path", messages: List[Dict[str, Any]]) -> None:
         """Record what methodology produced this run, beside its trace.
@@ -353,10 +375,14 @@ class AgentLoop(ToolCallLifecycle):
             Execution result dict.
         """
         token = bind_llm_session_id(session_id)
+        result = None
         try:
-            return self._run_bound(user_message, history, session_id)
+            result = self._run_bound(user_message, history, session_id)
+            return result
         finally:
             reset_llm_session_id(token)
+            if result is None or result.get("status") not in {"success", "waiting_user"}:
+                self._background_manager.cancel_all()
 
     def _run_bound(self, user_message: str, history: Optional[List[Dict[str, Any]]] = None, session_id: str = "") -> Dict[str, Any]:
         """Run the ReAct loop with the LLM session already bound.
@@ -538,8 +564,11 @@ class AgentLoop(ToolCallLifecycle):
             watchdog.start()
 
         stream_failure_streak = 0
+        final_answer_retry_pending = False
         try:
-            while iteration < self.max_iterations:
+            while iteration < self.max_iterations or final_answer_retry_pending:
+                final_answer_retry = final_answer_retry_pending
+                final_answer_retry_pending = False
                 self._tool_schema_tokens = estimate_tokens(request_definitions(self.registry))
                 if self._budget_stop_reason is not None:
                     break
@@ -552,9 +581,8 @@ class AgentLoop(ToolCallLifecycle):
                 self._run_iteration += 1
                 current_iter = self._run_iteration
 
-                # Inject background task notifications
-                bg = get_background_manager()
-                notifs = bg.drain_notifications()
+                # Inject background task notifications for this conversation.
+                notifs = self._background_manager.drain_notifications()
                 if notifs:
                     notif_text = "\n".join(f"[bg:{n['task_id']}] {n['status']}: {n['result']}" for n in notifs)
                     messages.append({"role": "user", "content": f"<background-results>\n{notif_text}\n</background-results>\n\n<system>Continue processing with the background results above.</system>"})
@@ -634,7 +662,7 @@ class AgentLoop(ToolCallLifecycle):
                                 "iter": current_iter,
                             }
                         )
-                        messages.append({"role": "system", "content": pending_directive})
+                        messages.append({"role": "user", "content": f"<system>{pending_directive}</system>"})
 
                 stream = TurnStream(
                     grounding=self._grounding, emit=self._emit, iteration=current_iter,
@@ -646,7 +674,7 @@ class AgentLoop(ToolCallLifecycle):
                 # whose validator requested no explicit recovery is text-only too:
                 # the model must revise from evidence already gathered instead of
                 # starting another research/refetch loop merely to reformat a draft.
-                is_last_iteration = (iteration == self.max_iterations)
+                is_last_iteration = iteration >= self.max_iterations
                 correction_text_only = grounding_correction_text_only
                 tool_defs = (
                     None
@@ -753,7 +781,7 @@ class AgentLoop(ToolCallLifecycle):
                 current_response_model = getattr(response, "response_model", None)
                 # `messages` is still exactly what this request sent.
                 self._context_meter.observe(
-                    usage.get("input_tokens") if isinstance(usage, dict) else None,
+                    usage.get("context_input_tokens", usage.get("input_tokens")) if isinstance(usage, dict) else None,
                     messages,
                     tool_schema_tokens=estimate_tokens(tool_defs) if tool_defs else 0,
                 )
@@ -850,12 +878,21 @@ class AgentLoop(ToolCallLifecycle):
                         )
                         continue
 
-                if forced_grounding_release or not response.has_tool_calls:
+                unoffered_retry_call = final_answer_retry and response.has_tool_calls
+                if (
+                    forced_grounding_release
+                    or unoffered_retry_call
+                    or not response.has_tool_calls
+                ):
                     # At the cap, release the last actual draft through the
                     # existing gate. The forbidden call's text is not an answer.
-                    final_content = pending_grounding_draft if forced_grounding_release else response.content or ""
+                    final_content = (
+                        pending_grounding_draft
+                        if forced_grounding_release
+                        else response.content or ""
+                    )
                     syntax_fallback_emitted = False
-                    if not final_content:
+                    if not final_content and not unoffered_retry_call:
                         empty_model_response_iter = iteration
                         trace.write(
                             {
@@ -874,11 +911,11 @@ class AgentLoop(ToolCallLifecycle):
                         consecutive_empty_responses += 1
                         messages.append(
                             {
-                                "role": "system",
+                                "role": "user",
                                 "content": (
-                                    "[SYSTEM] Your previous response was empty (no text, no tool "
+                                    "<system>Your previous response was empty (no text, no tool "
                                     "calls). Respond again with either your next tool call or "
-                                    "your final plain-text answer."
+                                    "your final plain-text answer.</system>"
                                 ),
                             }
                         )
@@ -887,33 +924,46 @@ class AgentLoop(ToolCallLifecycle):
                     consecutive_empty_responses = 0
                     # A model can answer the forced-text final iteration with its
                     # native tool-call DSL as prose (see _looks_like_tool_call_syntax).
-                    # That is not an answer: retry once with a plain-text instruction,
-                    # and if no budget remains release a deterministic fallback instead
-                    # of leaking the raw markup to the user.
-                    if _looks_like_tool_call_syntax(final_content):
+                    # That is not an answer: allow one text-only retry after the
+                    # iteration cap, then use a deterministic fallback if it also
+                    # fails. Cancellation and goal budgets still stop that retry.
+                    if unoffered_retry_call or _looks_like_tool_call_syntax(
+                        final_content
+                    ):
+                        if stream.streamed_chars:
+                            self._emit(
+                                "stream_reset",
+                                {
+                                    "iter": current_iter,
+                                    "reason": "tool_call_syntax_in_answer",
+                                },
+                            )
                         trace.write(
                             {
                                 "type": "tool_call_syntax_in_answer",
                                 "iter": current_iter,
                             }
                         )
-                        messages.append(
-                            {"role": "assistant", "content": final_content}
-                        )
+                        messages.append({"role": "assistant", "content": final_content})
                         messages.append(
                             {
-                                "role": "system",
+                                "role": "user",
                                 "content": (
-                                    "[SYSTEM] Your previous response was not released: it contained "
+                                    "<system>Your previous response was not released: it contained "
                                     "tool-call syntax even though tool calling is unavailable now. "
-                                    "Provide the final answer as plain prose only, with no XML/DSML tags."
+                                    "Provide the final answer as plain prose only, with no XML/DSML tags.</system>"
                                 ),
                             }
                         )
                         final_content = ""
-                        if iteration < self.max_iterations:
+                        if iteration <= self.max_iterations:
+                            # One extra text-only turn can re-emit a withheld final
+                            # answer; it does not extend the research/tool budget.
+                            final_answer_retry_pending = (
+                                iteration == self.max_iterations
+                            )
                             continue
-                        # No budget left: never leak the raw markup. The
+                        # The bounded retry also failed: never leak the raw markup. The
                         # grounding safe-fallback talks about instrument identity,
                         # which is wrong for non-market tasks, so use a neutral
                         # message here instead.
@@ -955,7 +1005,13 @@ class AgentLoop(ToolCallLifecycle):
                     should_continue_goal = False
                     continuation_snapshot = None
                     _max_cont = _goal_max_continuations()
-                    if not forced_grounding_release and active_goal_id and session_id and _max_cont > 0:
+                    if (
+                        not final_answer_retry
+                        and not forced_grounding_release
+                        and active_goal_id
+                        and session_id
+                        and _max_cont > 0
+                    ):
                         try:
                             if goal_store is None:
                                 from src.goal import GoalStore

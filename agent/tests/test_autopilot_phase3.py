@@ -165,6 +165,52 @@ def test_scaffold_refuses_overwrite_by_default(isolated_env: Path) -> None:
     assert "SignalEngine" in signal_path.read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize(
+    ("flag", "error"),
+    [
+        ("false", "already exists"),
+        ("False", "already exists"),
+        ("0", "already exists"),
+        ("no", "already exists"),
+        ("", "overwrite must be a boolean"),
+        ("maybe", "overwrite must be a boolean"),
+    ],
+)
+def test_scaffold_false_or_invalid_overwrite_keeps_existing_file(
+    isolated_env: Path, flag: str, error: str
+) -> None:
+    hyp_id = _make_hypothesis()
+    run_dir = _run_dir(isolated_env)
+    tool = ScaffoldSignalEngineTool()
+    first = json.loads(tool.execute(hypothesis_id=hyp_id, run_dir=str(run_dir)))
+    signal_path = Path(first["signal_engine_path"])
+    signal_path.write_text("# user edits\n", encoding="utf-8")
+
+    result = json.loads(
+        tool.execute(hypothesis_id=hyp_id, run_dir=str(run_dir), overwrite=flag)
+    )
+
+    assert result["status"] == "error"
+    assert error in result["error"]
+    assert signal_path.read_text(encoding="utf-8") == "# user edits\n"
+
+
+def test_scaffold_string_true_overwrite_replaces_file(isolated_env: Path) -> None:
+    hyp_id = _make_hypothesis()
+    run_dir = _run_dir(isolated_env)
+    tool = ScaffoldSignalEngineTool()
+    first = json.loads(tool.execute(hypothesis_id=hyp_id, run_dir=str(run_dir)))
+    signal_path = Path(first["signal_engine_path"])
+    signal_path.write_text("# user edits\n", encoding="utf-8")
+
+    result = json.loads(
+        tool.execute(hypothesis_id=hyp_id, run_dir=str(run_dir), overwrite="true")
+    )
+
+    assert result["status"] == "ok"
+    assert "SignalEngine" in signal_path.read_text(encoding="utf-8")
+
+
 # --------------------------------------------------------------------------
 # link_autopilot_backtest
 # --------------------------------------------------------------------------

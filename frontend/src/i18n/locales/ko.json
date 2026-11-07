@@ -1,6 +1,21 @@
 {
+  "gildata": {
+    "partner": "데이터 파트너 · Gildata",
+    "website": "MCP 이용 및 가입",
+    "features": "Gildata 선택 기능",
+    "optInHelp": "아홉 가지 기능은 기본적으로 모두 꺼져 있습니다. 업그레이드 전에 토큰을 저장했어도 사용할 기능을 개별적으로 켜야 합니다. 시세 기능을 켜도 Gildata를 직접 지정할 때만 사용합니다. 무료 소스에서 데이터를 찾지 못해도 자동으로 전환되지 않습니다.",
+    "fund_nav": "펀드 기준가",
+    "macro_series": "중국 거시경제 지표",
+    "announcements": "기업 및 펀드 공시",
+    "broker_reports": "증권사 리서치 보고서",
+    "market_quotes": "시세 (Gildata를 직접 지정한 경우만)",
+    "fin_query": "재무·시장 데이터 통합 조회",
+    "stock_selection": "종목 선별",
+    "symbol_search": "종목 검색에 Gildata 후보 포함",
+    "shannon": "포트폴리오 진단 (Shannon)"
+  },
   "app": {
-    "version": "v0.1.18"
+    "version": "v0.1.19"
   },
   "navigation": {
     "menu": "기능 둘러보기",
@@ -23,7 +38,8 @@
       "runtime": "브로커 연결과 거래 실행 상태를 확인합니다.",
       "settings": "모델, 데이터 소스, 브로커 연결을 설정합니다.",
       "pixelOffice": "리서치 작업을 계획하고 배정합니다. 배정만으로 실행되지는 않으며, 직급은 거래 권한을 부여하지 않는 표시에 불과합니다.",
-      "paperTrading": "가상 자금으로 일별 거래를 테스트합니다. 증권사에 주문을 보내지 않습니다. 현금 배당을 제외하므로 총수익이 아닙니다."
+      "paperTrading": "가상 자금으로 일별 거래를 테스트합니다. 증권사에 주문을 보내지 않습니다. 현금 배당을 제외하므로 총수익이 아닙니다.",
+      "researchArtifacts": "근거 기반 분석을 세션 간에 저장하고 재사용합니다."
     },
     "instructions": {
       "reports": "먼저 도우미에게 전략 백테스트를 요청한 후 여기에서 결과를 엽니다. 대화에서 생성한 PDF 등은 원래 대화에서 다운로드하세요.",
@@ -35,7 +51,8 @@
       "runtime": "먼저 설정 또는 보유 자산 페이지에서 브로커를 연결하세요. 사용 가능한 거래 작업은 브로커 기능과 사용자의 승인에 따라 달라집니다.",
       "settings": "먼저 모델을 설정하세요. 필요에 따라 데이터 소스나 브로커 연결을 추가하면 됩니다. 공개 시장 리서치에는 브로커 계좌가 필요하지 않습니다.",
       "pixelOffice": "리서치 작업을 계획하고 배정합니다. 배정만으로 실행되지는 않으며, 직급은 거래 권한을 부여하지 않는 표시에 불과합니다.",
-      "paperTrading": "완료된 일봉만 결산합니다. 전략은 이전 날짜의 데이터만 읽고 실행일 종가로 체결됩니다. 정규장 종료 후 30분을 기다리세요. 자동 실행은 예약되지 않습니다."
+      "paperTrading": "완료된 일봉만 결산합니다. 전략은 이전 날짜의 데이터만 읽고 실행일 종가로 체결됩니다. 정규장 종료 후 30분을 기다리세요. 자동 실행은 예약되지 않습니다.",
+      "researchArtifacts": "이전 분석을 검색하고,원하는 리비전을 열거나, 새 증거로 연결된 리비전을 만드세요. 이전 결론은 변경되지 않습니다."
     }
   },
   "layout": {
@@ -67,7 +84,41 @@
     "about": "소개",
     "sessionsLoadFailed": "대화를 불러올 수 없습니다.",
     "pixelOffice": "픽셀 오피스",
-    "paperTrading": "모의 거래"
+    "paperTrading": "모의 거래",
+    "researchArtifacts": "연구 산출물"
+  },
+  "researchArtifacts": {
+    "completeness": "완전성",
+    "optionalLinks": "선택적 연결 ID",
+    "formTitleNew": "연구 저장",
+    "verification": "검증 상태",
+    "subject": "연구 주제",
+    "createdNotice": "리비전 {{id}}을(를) 만들었습니다.",
+    "emptyHint": "분석을 저장하면 이후 세션에서 결론과 근거를 재사용할 수 있습니다.",
+    "newResearch": "새 연구",
+    "emptyTitle": "아직 연구 산출물이 없습니다",
+    "save": "연구 저장",
+    "evidenceMissing": "첨부된 증거 참조가 없습니다",
+    "saveError": "연구 산출물을 저장하지 못했습니다.",
+    "additionalEvidence": "추가 증거 URI(줄당 하나)",
+    "subtitle": "이전 리비전을 덮어쓰지 않고 근거 기반 분석을 세션 간에 재사용합니다.",
+    "revise": "이 리비전을 바탕으로 수정",
+    "history": "리비전 기록",
+    "searchPlaceholder": "주제, 유니버스 또는 내용 검색",
+    "loadError": "연구 산출물을 불러오지 못했습니다.",
+    "close": "닫기",
+    "universe": "유니버스(선택 사항)",
+    "title": "연구 산출물",
+    "dataAsOf": "데이터 기준일",
+    "content": "연구 내용",
+    "saving": "저장 중…",
+    "idempotentNotice": "동일한 내용과 출처 정보가 {{id}}에 이미 있습니다.",
+    "formTitleRevision": "연결된 리비전 만들기",
+    "evidence": "근거 자료",
+    "hypothesis_id": "가설 ID",
+    "goal_id": "목표 ID",
+    "session_id": "세션 ID",
+    "run_id": "실행 ID"
   },
   "runtime": {
     "monitorBadge": "거래 모니터",
@@ -405,6 +456,7 @@
     "taskSubtitle": "종목, 전략, 포트폴리오에 대해 물어보세요. 데이터 수집부터 계산까지 모든 과정을 보여드립니다.",
     "quickActions": "빠른 작업",
     "browseAllExamples": "모든 예시 보기",
+    "featured": "추천 예시",
     "greetings": {
       "morning1": "좋은 아침입니다.",
       "morning2": "좋은 아침입니다. 언제든 시작하세요.",
@@ -465,6 +517,9 @@
     "reasoningEffortHigh": "높음",
     "reasoningEffortXhigh": "매우 높음",
     "reasoningEffortMax": "최대",
+    "reasoningEffortMinimal": "최소",
+    "reasoningEffortUltra": "초고",
+    "reasoningEffortPersistent": "지속",
     "reasoningEffortDesc": "지원되는 모델의 추론 깊이를 조절합니다. 높을수록 복잡한 분석에 도움이 될 수 있지만 더 오래 걸리며, 지원하지 않는 제공자는 이 설정을 무시할 수 있습니다. '없음(명시)'은 추론을 끈 상태로 필드를 명시적으로 전송하며, 일부 OpenAI 모델은 도구를 사용할 때 이 값이 필요합니다.",
     "reasoningEffortReset": "선택한 모델은 {{level}}을(를) 지원하지 않아 제공자 기본값으로 되돌렸습니다.",
     "localApiAccess": "로컬 API 액세스",
@@ -1112,29 +1167,6 @@
     "apiKey": "API 키",
     "tushareTokenDesc": "중국 A주·선물·펀드·거시 데이터에 사용됩니다. 설정하지 않으면 가능한 경우 AKShare로 대체됩니다.",
     "gildataTokenDesc": "선택적 Gildata 데이터: A주 수정 일봉, 홍콩 주식·지수의 원시 시세, 장외 펀드 순자산가치, 중국 거시경제·공시·리서치 도구."
-  },
-  "qveris": {
-    "title": "QVeris 도구 마켓플레이스",
-    "subtitle": "무료 공개 데이터 경로를 기본으로 두고, 필요할 때만 QVeris 유료 실행을 켭니다.",
-    "enabled": "QVeris 유료 경로 활성화",
-    "baseUrl": "기본 URL",
-    "apiKey": "API 키",
-    "apiKeyPlaceholder": "비우면 현재 키 유지",
-    "mode": "모드",
-    "modeFree": "무료 공개 데이터만 사용",
-    "modePaid": "QVeris 유료 활성화",
-    "budget": "세션당 예산 Credits",
-    "budgetHint": "이 세션 예산에 도달하면 유료 실행을 중지합니다.",
-    "balance": "남은 Credits",
-    "recentUsage": "최근 사용량",
-    "noUsage": "최근 사용량 없음",
-    "signupCta": "가입 열기",
-    "signupHint": "QVeris 계정을 만들 때 이 초대 코드를 사용하세요.",
-    "inviteCode": "초대 코드",
-    "save": "QVeris 설정 저장",
-    "saved": "QVeris 설정이 저장되었습니다",
-    "testFailed": "QVeris 요청 실패",
-    "notConfigured": "구성되지 않음"
   },
   "agent": {
     "reasoningStrength": "추론 강도",
@@ -2052,9 +2084,6 @@
     "pattern": "차트 패턴 감지",
     "portfolio_risk_xray": "포트폴리오 위험 정밀 분석",
     "propose_mandate_profiles": "거래 운용 권한 제안",
-    "qveris_execute": "QVeris 작업 실행",
-    "qveris_inspect": "QVeris 작업 점검",
-    "qveris_search": "QVeris 검색",
     "read_document": "문서 읽기",
     "read_file": "파일 읽기",
     "read_url": "웹페이지 읽기",
@@ -2206,6 +2235,15 @@
       "failed": "읽지 못했습니다 — 합계에 포함되지 않음",
       "lastSuccess": "마지막으로 성공한 읽기 {{time}}",
       "noSuccess": "아직 성공한 읽기가 없습니다",
+      "cashDetails": "현금 및 융자",
+      "reportingCurrency": "보고 통화",
+      "financingLimit": "융자 한도",
+      "financingRemaining": "남은 융자 한도",
+      "cashAvailable": "사용 가능 현금",
+      "cashWithdrawable": "출금 가능 현금",
+      "cashFrozen": "동결 현금",
+      "cashSettling": "결제 대기 현금",
+      "binanceRestrictedLocation": "Binance가 이 읽기를 차단했습니다(HTTP 451). 현재 네트워크 위치가 제한되어 있습니다. 해당 지역에서 Binance를 사용할 수 있는지 확인하고 지원되는 공식 API 엔드포인트를 사용하세요.",
       "reconnect": "다시 연결",
       "retryRead": "다시 읽기"
     },
@@ -2312,6 +2350,7 @@
       "testFailed": "{{label}} 테스트 실패: {{error}}",
       "unknownTestError": "커넥터가 알 수 없는 오류를 반환했습니다.",
       "delete": "삭제",
+      "deleteInUse": "이 연결을 삭제하려면 먼저 ‘계좌 보유 자산’에서 제거하고 변경 사항을 저장하세요.",
       "configured": "필요한 자격 증명이 설정되었습니다",
       "accountTitle": "계좌",
       "accountCurrent": "끝자리 ····{{last4}} 계좌를 읽습니다",
@@ -2324,7 +2363,9 @@
       "accountDefault": " · 브로커 기본값",
       "accountDeactivated": " · 비활성화됨",
       "accountSave": "이 계좌 사용",
-      "accountSaved": "계좌를 저장했습니다."
+      "accountSaved": "계좌를 저장했습니다.",
+      "host": "호스트",
+      "port": "포트"
     },
     "imports": {
       "title": "extraETF Investments 가져오기",
@@ -2349,7 +2390,8 @@
       "current": "현재 금액",
       "targetValue": "목표 금액",
       "change": "변경 금액"
-    }
+    },
+    "quoteAsOf": "{{time}} 기준 시세"
   },
   "analysis": {
     "updated": "업데이트됨",
@@ -2534,5 +2576,65 @@
     "us": "미국 주식 · USD",
     "hk": "홍콩 주식 · HKD",
     "cn_a": "중국 A주 · CNY"
+  },
+  "shannon": {
+    "regionLabel": "Shannon 포트폴리오 진단",
+    "title": "포트폴리오 스타일과 리스크",
+    "intro": "Gildata MCP Shannon 서비스를 기반으로 포트폴리오의 스타일 성향, 개별 종목의 특성, 그리고 포트폴리오 변동성이 어느 보유 종목에 집중되어 있는지 확인합니다.",
+    "notConfigured": "진단을 사용하려면 Gildata 토큰을 설정하세요. 기존 상관관계 분석은 계속 사용할 수 있습니다.",
+    "holdingsLabel": "보유 중인 A주",
+    "holdingsHint": "한 줄에 한 종목씩 코드와 비중을 입력하세요. 비중을 모두 비워 두면 동일 비중으로 추정하며, 직접 입력하려면 모든 종목에 입력하고 합계를 100%로 맞춰야 합니다. A주 주식만 지원하며 현금이나 기타 자산을 자동으로 제외하지 않습니다.",
+    "holdingsInvalid": "위 형식에 따라 코드, 중복 종목, 비중을 확인하세요.",
+    "dateLabel": "분석 기준일(선택)",
+    "dateHint": "입력한 보유 종목을 이 날짜의 데이터로 분석합니다. 당시 실제로 보유했던 내역을 뜻하지 않습니다.",
+    "dateLatestHint": "비워 두면 최신 데이터를 사용합니다",
+    "publishedThrough": "데이터 기준일 {{date}}",
+    "useLatest": "최신 데이터 사용",
+    "analyze": "보유 종목 진단",
+    "analyzing": "분석 중…",
+    "retry": "다시 시도",
+    "serviceUnavailable": "서비스를 일시적으로 사용할 수 없습니다. 다시 시도하세요.",
+    "analysisDate": "실제 분석일 {{date}}",
+    "included": "{{included}}/{{requested}}개 종목 포함",
+    "equalWeight": "동일 비중 가정",
+    "enteredWeights": "입력 비중으로 분석",
+    "riskDate": "리스크 추정일 {{date}}",
+    "dateFallback": "요청일 {{requested}}, 실제 사용한 데이터 기준일 {{actual}}.",
+    "partial": "일부 종목이 제외되었습니다. 아래 모델 결과는 포함된 부분만 나타내며 전체 포트폴리오의 모습이 아닙니다.",
+    "coveredWeight": "포함된 입력 비중 {{weight}}.",
+    "sourceLimitations": "데이터 소스가 이번 분석에 제약이 있다고 알렸습니다. 결과는 참고용으로만 보세요.",
+    "styleTitle": "포트폴리오 스타일 익스포저",
+    "styleAxis": "낮음 ← 모델 기준 0 → 높음",
+    "styleNote": "빨간색은 높음, 초록색은 낮음을 뜻하며 중앙선에서 멀수록 성향이 뚜렷합니다. 값은 표준화된 특성이며 비중이나 등락 예측이 아닙니다. 시장 베타도 표준화된 값이며 원래의 회귀 베타가 아닙니다. 누락되었거나 커버리지가 부족한 값은 —로 표시합니다.",
+    "viewStockStyles": "개별 종목 스타일 보기",
+    "heatmapTitle": "개별 종목 스타일 익스포저 히트맵",
+    "heatmapNote": "각 행은 종목, 각 열은 팩터이며 순서는 위 차트와 같습니다. 빨간색은 높음, 초록색은 낮음이며 색은 ±2에서 포화되지만 값은 자르지 않습니다. 개별 종목의 특성을 보여 줄 뿐, 해당 종목의 리스크 기여 분해가 아닙니다.",
+    "missingData": "데이터 없음",
+    "noStockStyle": "사용할 수 있는 개별 종목 스타일 데이터가 없습니다.",
+    "riskTitle": "리스크 귀인: 변동성의 원천",
+    "mainContributor": "반환된 종목 중 {{name}}의 포트폴리오 변동성 추정 기여가 가장 큽니다.",
+    "riskNote": "포트폴리오 변동성이 어디에 집중되어 있는지 파악하고 관련 비중을 우선 점검하는 데 사용합니다. 비중은 자금 배분 비율이며, 변동성 기여율은 종목의 변동성 기여 ÷ 포트폴리오 전체 변동성입니다. 막대는 이 차트의 최대 기여를 기준으로 표시됩니다.",
+    "diversifying": "분산 효과",
+    "addingVolatility": "변동성 확대",
+    "zeroContribution": "기여 없음",
+    "riskFootnote": "기여의 절댓값이 가장 큰 상위 5개 종목을 표시합니다. 기여율은 손실 확률이 아니며 매도 시 리스크 감소 폭의 예측도 아닙니다. 음수이거나 100%를 넘을 수 있고 상위 5개의 합계가 100%가 아닐 수 있습니다. 음의 기여는 분산 효과를 뜻합니다. 개별 종목의 고유 리스크에는 공통 변동성 가정을 사용합니다.",
+    "noData": "사용할 수 있는 데이터가 없습니다. 누락된 값을 0으로 대체하지 않습니다.",
+    "colStock": "종목",
+    "colAllocation": "비중",
+    "colContribution": "기여",
+    "colShare": "변동성 기여율",
+    "colShareLabel": "포트폴리오 변동성 기여율",
+    "factors": {
+      "BETA": "시장 베타",
+      "VALUE": "가치",
+      "GROWTH": "성장",
+      "QUALITY": "품질",
+      "MOMENTUM_12M": "12개월 모멘텀",
+      "MOMENTUM_6M": "6개월 모멘텀",
+      "VOLATILITY": "변동성",
+      "LIQUIDITY": "유동성",
+      "SIZE": "규모",
+      "LEVERAGE": "레버리지"
+    }
   }
 }

@@ -9,6 +9,7 @@ and the service dispatch degrading cleanly when nothing is configured.
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -248,6 +249,73 @@ def test_longbridge_public_config_redacts_secrets() -> None:
     assert pub["app_key"].endswith("***")
     assert all(value not in repr(cfg) for value in values.values())
     assert all(value not in repr(pub) for value in values.values())
+
+
+def test_longbridge_balance_keeps_financing_and_per_currency_cash() -> None:
+    """``total_cash`` nets every currency, so a borrowed HKD leg only shows per currency."""
+    balance = SimpleNamespace(
+        currency="HKD",
+        # USD 1,000 at 7.8 net of the HKD -500 leg.
+        total_cash=Decimal("7300.00"),
+        max_finance_amount=Decimal("5000.00"),
+        remaining_finance_amount=Decimal("4000.00"),
+        cash_infos=[
+            SimpleNamespace(
+                currency="USD",
+                available_cash=Decimal("1000.00"),
+                withdraw_cash=Decimal("900.00"),
+                frozen_cash=Decimal("10.00"),
+                settling_cash=Decimal("20.00"),
+            ),
+            SimpleNamespace(
+                currency="HKD",
+                available_cash=Decimal("-500.00"),
+                withdraw_cash=Decimal("-600.00"),
+                frozen_cash=Decimal("500.00"),
+                settling_cash=Decimal("-200.00"),
+            ),
+        ],
+    )
+    row = lb._balance_to_dict(balance)
+    assert row["max_finance_amount"] == 5000.0
+    assert row["remaining_finance_amount"] == 4000.0
+    assert row["cash_infos"] == [
+        {
+            "currency": "USD",
+            "available_cash": 1000.0,
+            "withdraw_cash": 900.0,
+            "frozen_cash": 10.0,
+            "settling_cash": 20.0,
+        },
+        {
+            "currency": "HKD",
+            "available_cash": -500.0,
+            "withdraw_cash": -600.0,
+            "frozen_cash": 500.0,
+            "settling_cash": -200.0,
+        },
+    ]
+
+
+def test_longbridge_balance_sparse_reply_reads_as_none() -> None:
+    """Fields the SDK omits read as missing, never as zero cash or headroom."""
+    row = lb._balance_to_dict(SimpleNamespace(currency="HKD", total_cash=1))
+    assert row["cash_infos"] == []
+    assert row["max_finance_amount"] is None
+    assert row["remaining_finance_amount"] is None
+
+    row = lb._balance_to_dict(
+        SimpleNamespace(currency="HKD", cash_infos=[SimpleNamespace(currency="USD")])
+    )
+    assert row["cash_infos"] == [
+        {
+            "currency": "USD",
+            "available_cash": None,
+            "withdraw_cash": None,
+            "frozen_cash": None,
+            "settling_cash": None,
+        }
+    ]
 
 
 def _set_longbridge_environment(monkeypatch, values) -> None:
@@ -732,6 +800,7 @@ def test_binance_exchange_adjusts_for_server_time(monkeypatch) -> None:
     assert captured["options"] == {
         "adjustForTimeDifference": True,
         "recvWindow": 10_000,
+        "fetchOpenOrders": {"warnWithoutSymbol": False},
     }
     assert captured["sandbox"] is False
 
@@ -1133,6 +1202,15 @@ def test_dhan_whole_quantity_is_preserved_in_the_paper_fill(quantity, expected) 
     assert result["status"] == "ok"
     assert result["quantity"] == expected
     assert result["paper_guard"] == "simulated_locally"
+
+
+@pytest.mark.parametrize("quantity", [0.5, 1.5, "1.5", float("nan"), "invalid"])
+def test_shoonya_place_order_rejects_non_whole_quantity(quantity) -> None:
+    result = sh.place_order(
+        sh.ShoonyaConfig(profile="paper"), symbol="RELIANCE", side="buy", quantity=quantity
+    )
+    assert result["status"] == "error"
+    assert "whole number" in result["error"]
 
 
 @pytest.mark.parametrize("mod, Config", [(dh, dh.DhanConfig), (sh, sh.ShoonyaConfig)])

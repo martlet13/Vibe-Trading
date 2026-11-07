@@ -102,7 +102,7 @@ _CONNECTOR_COMPATIBILITY: dict[str, PortfolioCompatibility] = {
         "experimental",
         1,
         "stocks_etfs",
-        "Equity positions for one selected account, unpriced until the quote reply is mapped.",
+        "Equity positions for one selected account, priced through get_equity_quotes.",
     ),
     # No "scalable" entry: its profile does not declare account.read /
     # positions.read, so it is not a portfolio-eligible connection. The

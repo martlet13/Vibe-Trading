@@ -104,6 +104,23 @@ def test_flows_can_be_loaded_from_a_file_and_internal_kinds_are_ignored(
     assert payload["summary"]["time_weighted_return"] == pytest.approx(-0.01, abs=1e-9)
 
 
+@pytest.mark.parametrize("flag", ["false", "False", "0", "no"])
+def test_a_string_false_invert_sign_leaves_file_amounts_alone(
+    tmp_path: Path, flag: str
+) -> None:
+    """A JSON-string "false" must not be read as truthy and negate every row."""
+    payload = json.loads(
+        CashFlowPerformanceTool().execute(
+            valuations=_valuations(),
+            flows_path=str(_write_flow_file(tmp_path)),
+            flows_invert_sign=flag,
+        )
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["summary"]["net_external_flow"] == pytest.approx(900.0)
+
+
 def test_a_bad_path_returns_a_clean_error_envelope(tmp_path: Path) -> None:
     """A missing file is an explicit error, never a silent null result."""
     payload = json.loads(
@@ -176,6 +193,29 @@ def test_invalid_input_returns_an_error_envelope(
     payload = json.loads(CashFlowPerformanceTool().execute(**kwargs))
     assert payload["status"] == "error"
     assert fragment in payload["error"]
+
+
+def test_transfer_into_the_portfolio_rejects_the_wrong_holder_sign() -> None:
+    """A positive portfolio inflow is not accepted as a holder cash inflow."""
+    payload = json.loads(
+        CashFlowPerformanceTool().execute(
+            valuations=[
+                {"date": "2024-01-01", "value": 100.0},
+                {"date": "2024-12-31", "value": 200.0},
+            ],
+            flows=[
+                {
+                    "date": "2024-07-01",
+                    "amount": 100.0,
+                    "kind": "transfer_in",
+                    "currency": "USD",
+                }
+            ],
+        )
+    )
+
+    assert payload["status"] == "error"
+    assert "negative (cash out)" in payload["error"]
 
 
 def test_reclassifying_a_custom_kind_makes_it_external() -> None:

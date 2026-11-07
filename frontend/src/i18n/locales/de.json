@@ -1,6 +1,21 @@
 {
+  "gildata": {
+    "partner": "Datenpartner · Gildata",
+    "website": "MCP-Zugang und Registrierung",
+    "features": "Optionale Gildata-Funktionen",
+    "optInHelp": "Alle neun Funktionen sind standardmäßig ausgeschaltet. Ein gespeichertes Token aktiviert auch nach einem Update keine davon. Selbst bei aktivierten Kursdaten wird Gildata nur auf ausdrückliche Auswahl genutzt. Liefern kostenlose Quellen keine Daten, wird Gildata nicht automatisch abgefragt.",
+    "fund_nav": "Nettoinventarwerte von Fonds",
+    "macro_series": "Chinesische Konjunkturindikatoren",
+    "announcements": "Unternehmens- und Fondsmitteilungen",
+    "broker_reports": "Analystenberichte von Brokern",
+    "market_quotes": "Marktdaten (nur bei ausdrücklicher Auswahl von Gildata)",
+    "fin_query": "Kombinierte Finanzabfragen",
+    "stock_selection": "Aktienfilter",
+    "symbol_search": "Gildata in die Wertpapiersuche einbeziehen",
+    "shannon": "Portfoliodiagnose (Shannon)"
+  },
   "app": {
-    "version": "v0.1.18"
+    "version": "v0.1.19"
   },
   "charts": {
     "noPriceData": "Noch keine Kursdaten für dieses Symbol",
@@ -29,7 +44,8 @@
       "runtime": "Brokerverbindungen und den Betriebsstatus des Handels prüfen.",
       "settings": "Modelle, Datenquellen und Brokerverbindungen konfigurieren.",
       "pixelOffice": "Plane und verteile Rechercheaufgaben. Eine Zuweisung startet keine Ausführung. Ränge sind Bezeichnungen und erteilen keine Handelsrechte.",
-      "paperTrading": "Tägliche Trades mit virtuellem Kapital testen. Es werden keine Brokeraufträge gesendet. Bardividenden sind nicht enthalten; die Ergebnisse zeigen keine Gesamtrendite."
+      "paperTrading": "Tägliche Trades mit virtuellem Kapital testen. Es werden keine Brokeraufträge gesendet. Bardividenden sind nicht enthalten; die Ergebnisse zeigen keine Gesamtrendite.",
+      "researchArtifacts": "Beleggestützte Analysen sitzungsübergreifend speichern und wiederverwenden."
     },
     "instructions": {
       "reports": "Bitte den Assistenten zuerst um einen Strategie-Backtest und öffne hier die Ergebnisse. Im Chat erstellte PDFs und andere Dokumente lädst du in der ursprünglichen Unterhaltung herunter.",
@@ -41,7 +57,8 @@
       "runtime": "Richte zuerst unter Einstellungen oder Portfolio eine Brokerverbindung ein. Verfügbare Handelsaktionen hängen von den Brokerfunktionen und deiner Autorisierung ab.",
       "settings": "Richte zunächst ein Modell ein. Ergänze Datenquellen oder Brokerverbindungen nach Bedarf; für öffentliche Marktrecherche ist kein Brokerkonto nötig.",
       "pixelOffice": "Plane und verteile Rechercheaufgaben. Eine Zuweisung startet keine Ausführung. Ränge sind Bezeichnungen und erteilen keine Handelsrechte.",
-      "paperTrading": "Nur abgeschlossene Tageskerzen werden abgerechnet. Strategien sehen vorherige Tage und handeln zum Schlusskurs des Ausführungstags. Bitte 30 Minuten nach regulärem Börsenschluss warten; es wird keine automatische Ausführung geplant."
+      "paperTrading": "Nur abgeschlossene Tageskerzen werden abgerechnet. Strategien sehen vorherige Tage und handeln zum Schlusskurs des Ausführungstags. Bitte 30 Minuten nach regulärem Börsenschluss warten; es wird keine automatische Ausführung geplant.",
+      "researchArtifacts": "Frühere Analysen suchen, Revisionen öffnen oder mit neuen Belegen eine verknüpfte Revision erstellen. Ältere Schlussfolgerungen bleiben unverändert."
     }
   },
   "layout": {
@@ -73,7 +90,41 @@
     "portfolio": "Kontopositionen",
     "sessionsLoadFailed": "Gespräche können nicht geladen werden.",
     "pixelOffice": "Pixelbüro",
-    "paperTrading": "Simulierter Handel"
+    "paperTrading": "Simulierter Handel",
+    "researchArtifacts": "Recherche-Artefakte"
+  },
+  "researchArtifacts": {
+    "subject": "Forschungsthema",
+    "dataAsOf": "Datenstand",
+    "saving": "Speichern…",
+    "saveError": "Recherche-Artefakt konnte nicht gespeichert werden.",
+    "evidenceMissing": "Keine Belegreferenzen vorhanden",
+    "createdNotice": "Revision {{id}} erstellt.",
+    "emptyHint": "Speichere eine Analyse, um ihre Schlussfolgerungen und Belege in späteren Sitzungen wiederzuverwenden.",
+    "emptyTitle": "Noch keine Recherche-Artefakte",
+    "save": "Recherche speichern",
+    "universe": "Universum (optional)",
+    "loadError": "Recherche-Artefakte konnten nicht geladen werden.",
+    "formTitleNew": "Recherche speichern",
+    "verification": "Verifizierung",
+    "additionalEvidence": "Zusätzliche Beleg-URIs (eine pro Zeile)",
+    "revise": "Ausgehend von dieser Revision überarbeiten",
+    "completeness": "Vollständigkeit",
+    "searchPlaceholder": "Thema, Universum oder Inhalt suchen",
+    "newResearch": "Neue Recherche",
+    "formTitleRevision": "Verknüpfte Revision erstellen",
+    "content": "Inhalt der Recherche",
+    "subtitle": "Beleggestützte Analysen sitzungsübergreifend wiederverwenden, ohne frühere Revisionen zu überschreiben.",
+    "history": "Revisionsverlauf",
+    "optionalLinks": "Optionale verknüpfte IDs",
+    "title": "Recherche-Artefakte",
+    "close": "Schließen",
+    "idempotentNotice": "Identischer Inhalt und identische Provenienz existieren bereits in {{id}}.",
+    "evidence": "Belegquellen",
+    "hypothesis_id": "Hypothesen-ID",
+    "goal_id": "Ziel-ID",
+    "session_id": "Sitzungs-ID",
+    "run_id": "Lauf-ID"
   },
   "runtime": {
     "monitorBadge": "Runtime-Monitor",
@@ -411,6 +462,7 @@
     "taskSubtitle": "Frag nach einer Aktie, einer Strategie oder deinem Portfolio — ich hole die Daten, rechne alles durch und zeige jeden Schritt.",
     "quickActions": "Schnellaktionen",
     "browseAllExamples": "Alle Beispiele durchsuchen",
+    "featured": "Ausgewählte Beispiele",
     "greetings": {
       "morning1": "Guten Morgen.",
       "morning2": "Morgen — ich bin bereit, wenn du es bist.",
@@ -455,6 +507,9 @@
     "reasoningEffortHigh": "Hoch",
     "reasoningEffortXhigh": "Sehr hoch",
     "reasoningEffortMax": "Maximal",
+    "reasoningEffortMinimal": "Minimal",
+    "reasoningEffortUltra": "Ultra",
+    "reasoningEffortPersistent": "Anhaltend",
     "reasoningEffortDesc": "Steuert die Reasoning-Tiefe bei unterstützten Modellen. Höhere Stufen können die komplexe Analyse verbessern, dauern aber länger; nicht unterstützte Anbieter ignorieren diese Einstellung möglicherweise. Keine (explizit) sendet das Feld mit deaktiviertem Reasoning — einige OpenAI-Modelle benötigen dies, um Tools zu verwenden.",
     "reasoningEffortReset": "Das gewählte Modell unterstützt {{level}} nicht; auf den Anbieter-Standard zurückgesetzt.",
     "useDefaultModel": "Standardmodell verwenden",
@@ -1118,29 +1173,6 @@
     "apiKey": "API-Schlüssel",
     "tushareTokenDesc": "Verwendet für China-A-Aktien, Futures, Fonds und Makrodaten. Falls nicht gesetzt, greift das Projekt auf AKShare zurück, sofern verfügbar.",
     "gildataTokenDesc": "Optionale Gildata-Daten: bereinigte Tageskurse chinesischer A-Aktien, unbereinigte Hongkong- und Indexkurse, Nettoinventarwerte nicht börsengehandelter Fonds sowie chinesische Makro-, Mitteilungs- und Research-Tools."
-  },
-  "qveris": {
-    "title": "QVeris-Tool-Marktplatz",
-    "subtitle": "Behalten Sie kostenlose öffentliche Daten als Standard, oder aktivieren Sie kostenpflichtige QVeris-Ausführung für spezielle Datenwerkzeuge.",
-    "enabled": "Kostenpflichtige QVeris-Route aktivieren",
-    "baseUrl": "Basis-URL",
-    "apiKey": "API-Schlüssel",
-    "apiKeyPlaceholder": "Leer lassen, um den aktuellen Schlüssel beizubehalten",
-    "mode": "Modus",
-    "modeFree": "Nur kostenlose öffentliche Daten",
-    "modePaid": "Kostenpflichtiges QVeris aktiviert",
-    "budget": "Budget-Kreditpunkte pro Sitzung",
-    "budgetHint": "Die kostenpflichtige Ausführung stoppt, wenn das Sitzungsbudget erreicht ist.",
-    "balance": "Verbleibende Kreditpunkte",
-    "recentUsage": "Letzte Nutzung",
-    "noUsage": "Keine letzte Nutzung",
-    "signupCta": "Registrierung öffnen",
-    "signupHint": "Verwenden Sie diesen Einladungscode bei der Erstellung Ihres QVeris-Kontos.",
-    "inviteCode": "Einladungscode",
-    "save": "QVeris-Einstellungen speichern",
-    "saved": "QVeris-Einstellungen gespeichert",
-    "testFailed": "QVeris-Anfrage fehlgeschlagen",
-    "notConfigured": "Nicht konfiguriert"
   },
   "agent": {
     "reasoningStrength": "Reasoning-Aufwand",
@@ -2052,9 +2084,6 @@
     "pattern": "Chart-Muster erkennen",
     "portfolio_risk_xray": "Portfolio-Risiko durchleuchten",
     "propose_mandate_profiles": "Trading-Mandate vorschlagen",
-    "qveris_execute": "QVeris-Aktion ausführen",
-    "qveris_inspect": "QVeris-Aktion inspizieren",
-    "qveris_search": "QVeris durchsuchen",
     "read_document": "Dokument lesen",
     "read_file": "Datei lesen",
     "read_url": "Webseite lesen",
@@ -2206,6 +2235,15 @@
       "failed": "Konnte nicht gelesen werden — nicht in der Summe enthalten",
       "lastSuccess": "Letzter erfolgreicher Abruf {{time}}",
       "noSuccess": "Noch kein erfolgreicher Abruf",
+      "cashDetails": "Barmittel und Finanzierung",
+      "reportingCurrency": "Berichtswährung",
+      "financingLimit": "Finanzierungslimit",
+      "financingRemaining": "Verbleibende Finanzierung",
+      "cashAvailable": "Verfügbares Guthaben",
+      "cashWithdrawable": "Auszahlbares Guthaben",
+      "cashFrozen": "Gesperrtes Guthaben",
+      "cashSettling": "Guthaben in Abwicklung",
+      "binanceRestrictedLocation": "Binance hat diesen Abruf (HTTP 451) blockiert: Der aktuelle Netzwerkstandort ist eingeschränkt. Prüfe, ob Binance in deiner Region verfügbar ist, und verwende den unterstützten API-Endpunkt.",
       "reconnect": "Neu verbinden",
       "retryRead": "Lesen wiederholen"
     },
@@ -2312,6 +2350,7 @@
       "testFailed": "Test für {{label}} fehlgeschlagen: {{error}}",
       "unknownTestError": "Der Connector hat einen unbekannten Fehler zurückgegeben.",
       "delete": "Löschen",
+      "deleteInUse": "Entferne diese Verbindung aus „Kontopositionen“ und speichere die Änderungen, bevor du sie löschst.",
       "configured": "Erforderliche Zugangsdaten konfiguriert",
       "accountTitle": "Konto",
       "accountCurrent": "Liest das Konto mit der Endung ····{{last4}}",
@@ -2324,7 +2363,9 @@
       "accountDefault": " · Broker-Standard",
       "accountDeactivated": " · deaktiviert",
       "accountSave": "Dieses Konto verwenden",
-      "accountSaved": "Konto gespeichert."
+      "accountSaved": "Konto gespeichert.",
+      "host": "Host",
+      "port": "Port"
     },
     "imports": {
       "title": "extraETF Investments importieren",
@@ -2349,7 +2390,8 @@
       "current": "Aktueller Wert",
       "targetValue": "Zielwert",
       "change": "Wertänderung"
-    }
+    },
+    "quoteAsOf": "Kursstand: {{time}}"
   },
   "analysis": {
     "updated": "Aktualisiert",
@@ -2534,5 +2576,65 @@
     "us": "US-Aktien · USD",
     "hk": "Hongkong-Aktien · HKD",
     "cn_a": "Chinesische A-Aktien · CNY"
+  },
+  "shannon": {
+    "regionLabel": "Shannon-Portfoliodiagnose",
+    "title": "Portfoliostil und Risiko",
+    "intro": "Bereitgestellt über den Shannon-Dienst von Gildata MCP. Untersuche den Stil des Portfolios, die Merkmale einzelner Aktien und die Positionen, die zur Portfoliovolatilität beitragen.",
+    "notConfigured": "Konfiguriere ein Gildata-Token, um die Diagnose zu nutzen. Die bestehende Korrelationsanalyse bleibt verfügbar.",
+    "holdingsLabel": "Deine A-Share-Positionen",
+    "holdingsHint": "Eine Aktie pro Zeile: Code und Gewichtung. Lass alle Gewichtungen leer für eine Gleichgewichtung oder gib alle Gewichtungen mit einer Summe von 100 % ein. Nur A-Share-Aktien; Bargeld und andere Vermögenswerte werden nicht stillschweigend ausgeschlossen.",
+    "holdingsInvalid": "Prüfe Codes, Duplikate und Gewichtungen anhand des obigen Formats.",
+    "dateLabel": "Stichtag (optional)",
+    "dateHint": "Analysiert die eingegebenen Positionen zu diesem Datum, nicht deine historischen Kontobestände.",
+    "dateLatestHint": "Leer lassen für die neuesten verfügbaren Daten",
+    "publishedThrough": "Daten veröffentlicht bis {{date}}",
+    "useLatest": "Neueste Daten verwenden",
+    "analyze": "Positionen analysieren",
+    "analyzing": "Analyse läuft…",
+    "retry": "Erneut versuchen",
+    "serviceUnavailable": "Dienst nicht verfügbar. Bitte erneut versuchen.",
+    "analysisDate": "Tatsächliches Analysedatum {{date}}",
+    "included": "{{included}}/{{requested}} Aktien einbezogen",
+    "equalWeight": "Annahme: Gleichgewichtung",
+    "enteredWeights": "Mit eingegebenen Gewichtungen",
+    "riskDate": "Datum der Risikoschätzung {{date}}",
+    "dateFallback": "Angefordertes Datum {{requested}}; tatsächlich verwendetes Datendatum {{actual}}.",
+    "partial": "Einige Aktien wurden ausgeschlossen. Die Modellergebnisse beschreiben nur den abgedeckten Teil, nicht das gesamte Portfolio.",
+    "coveredWeight": "Abgedeckte eingegebene Gewichtung {{weight}}.",
+    "sourceLimitations": "Die Datenquelle meldet Einschränkungen; interpretiere diese Schätzungen mit Vorsicht.",
+    "styleTitle": "Stil-Exposure des Portfolios",
+    "styleAxis": "Niedriger ← Modellreferenz 0 → Höher",
+    "styleNote": "Rot bedeutet höher, Grün niedriger; der Abstand zur Nulllinie zeigt die Ausprägung. Die Werte sind standardisierte Merkmale, keine Gewichtungen oder Prognosen; das Markt-Beta ist standardisiert, kein rohes Regressions-Beta. Fehlende oder unvollständige Abdeckung wird als — angezeigt.",
+    "viewStockStyles": "Stile der Einzelaktien anzeigen",
+    "heatmapTitle": "Heatmap der Stil-Exposures je Aktie",
+    "heatmapNote": "Zeilen sind Aktien; die Spalten folgen der obigen Faktorreihenfolge. Rot ist höher, Grün niedriger; die Farben sättigen bei ±2, ohne Werte abzuschneiden. Dies sind Merkmale der Aktien, keine Zerlegung ihres Risikobeitrags.",
+    "missingData": "Daten fehlen",
+    "noStockStyle": "Keine Stildaten für Einzelaktien verfügbar.",
+    "riskTitle": "Risikoattribution: Quellen der Volatilität",
+    "mainContributor": "{{name}} hat unter den zurückgegebenen Aktien den größten geschätzten Beitrag zur Portfoliovolatilität.",
+    "riskNote": "Zeigt, wo sich die Portfoliovolatilität konzentriert, damit du die betreffenden Gewichtungen zuerst prüfen kannst. Die Gewichtung ist der Kapitalanteil; der Volatilitätsanteil ist der Volatilitätsbeitrag der Aktie geteilt durch die gesamte Portfoliovolatilität. Die Balken sind auf den größten gezeigten Beitrag skaliert.",
+    "diversifying": "Diversifizierend",
+    "addingVolatility": "Erhöht die Volatilität",
+    "zeroContribution": "Kein Beitrag",
+    "riskFootnote": "Zeigt die fünf betragsmäßig größten Beiträge. Die Anteile sind keine Verlustwahrscheinlichkeiten und keine prognostizierte Risikominderung durch Verkauf; sie können negativ sein oder 100 % übersteigen, und die Top 5 ergeben nicht unbedingt 100 %. Negative Beiträge wirken diversifizierend. Für das titelspezifische Risiko wird eine einheitliche Volatilitätsannahme verwendet.",
+    "noData": "Keine Daten verfügbar; fehlende Werte werden nicht als null gewertet.",
+    "colStock": "Aktie",
+    "colAllocation": "Gewichtung",
+    "colContribution": "Beitrag",
+    "colShare": "Anteil an der Portfoliovolatilität",
+    "colShareLabel": "Anteil am Volatilitätsbeitrag des Portfolios",
+    "factors": {
+      "BETA": "Markt-Beta",
+      "VALUE": "Value",
+      "GROWTH": "Wachstum",
+      "QUALITY": "Quality",
+      "MOMENTUM_12M": "Momentum 12M",
+      "MOMENTUM_6M": "Momentum 6M",
+      "VOLATILITY": "Volatilität",
+      "LIQUIDITY": "Liquidität",
+      "SIZE": "Size",
+      "LEVERAGE": "Leverage"
+    }
   }
 }

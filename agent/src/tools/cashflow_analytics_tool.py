@@ -14,6 +14,7 @@ from datetime import date
 from typing import Any
 
 from src.agent.tools import BaseTool
+from src.tools._arguments import boolean_argument
 from src.entities.cashflow import CashFlow, CashFlowSeries
 from src.entities.ingest import load_cashflows
 from src.quantlib.performance import (
@@ -84,8 +85,9 @@ class CashFlowPerformanceTool(BaseTool):
                 "description": (
                     "Inline cash flows. Amounts are from the client's point of "
                     "view: a contribution is NEGATIVE (cash leaves the client) "
-                    "and a distribution is POSITIVE. Mutually exclusive with "
-                    "flows_path."
+                    "and a distribution is POSITIVE. A transfer into the "
+                    "portfolio is NEGATIVE; a transfer out is POSITIVE. "
+                    "Mutually exclusive with flows_path."
                 ),
                 "items": {
                     "type": "object",
@@ -358,13 +360,14 @@ def _resolve_flows(kwargs: dict[str, Any]) -> CashFlowSeries | None:
         columns = kwargs.get("flows_columns")
         if columns is not None and not isinstance(columns, dict):
             raise ValueError("flows_columns must be an object mapping field to column name")
+        invert_sign = boolean_argument(kwargs.get("flows_invert_sign", False), field="flows_invert_sign")
         return load_cashflows(
             str(path),
             columns=columns,
             currency=currency,
             default_kind=kwargs.get("flows_default_kind"),
             date_format=kwargs.get("flows_date_format"),
-            invert_sign=bool(kwargs.get("flows_invert_sign", False)),
+            invert_sign=invert_sign,
         )
 
     if not inline:

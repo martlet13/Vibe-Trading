@@ -1122,8 +1122,10 @@ def test_build_live_runner_reads_normalize_adapter_payloads(tmp_path, monkeypatc
     monkeypatch.setattr(api_server, "_mandate_account_ref", lambda broker: "5QR00001")
 
     runner = api_server._build_live_runner("robinhood")
+    # ``broker_type`` is the row's ``type`` verbatim ('long'/'short'/...); the
+    # generic reader never interprets it.
     assert runner._read_positions() == [
-        {"symbol": "NVDA", "quantity": "3", "average_cost": "100.00", "broker_type": "unobserved", "qty": "3"}
+        {"symbol": "NVDA", "quantity": "3", "average_cost": "100.00", "broker_type": "long", "qty": "3"}
     ]
     assert runner._read_open_orders() == [{"order_id": "o1"}]
     assert runner._read_balance()["buying_power"] == "4200.00"

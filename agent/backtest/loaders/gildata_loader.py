@@ -52,6 +52,7 @@ import pandas as pd
 
 from backtest.loaders._http import resolve_min_interval, throttled_post_json
 from backtest.loaders.base import cached_loader_fetch, validate_date_range
+from src.config.gildata_features import feature_available
 from backtest.loaders.gildata_codes import _normalize_ref, resolve_vendor_code
 from backtest.loaders.registry import _A_SHARE_INDEX_CODE, register
 
@@ -62,7 +63,6 @@ _BASE_URL_ENV = "GILDATA_BASE_URL"
 _DEFAULT_BASE_URL = "https://api.gildata.com/mcp-servers/aidata-assistant-srv-rawapi"
 
 # Tokens that must not count as "configured" (mirrors tushare's placeholder set).
-GILDATA_TOKEN_PLACEHOLDERS = {"", "your-gildata-token"}
 
 # Shared throttle/session bucket for every Gildata request in this process.
 _HOST_KEY = "gildata"
@@ -152,17 +152,16 @@ def _gildata_symbol(code: str) -> Optional[str]:
     return None
 
 
-def _call_tool(tool: str, arguments: Dict[str, Any]) -> Any:
-    """Invoke one MCP tool and return its first result entry.
+def _call_tool_results(tool: str, arguments: Dict[str, Any]) -> list[dict[str, Any]]:
+    """Invoke one MCP tool and retain every result entry.
 
     Args:
         tool: Tool name, e.g. ``"StockDailyQuote"``.
         arguments: Structured tool arguments.
 
     Returns:
-        The first ``results`` entry dict (``{"api_name", "columns", "rows",
-        ...}``) — quote tools carry ``rows`` there, the recall meta-tool
-        carries ``candidates``. Empty dict when the vendor reports no results.
+        All ``results`` entries. Quote tools carry ``rows``; the recall
+        meta-tool carries ``candidates``. Empty list for no results.
 
     Raises:
         RuntimeError: If the token is missing, or the vendor answers with a
@@ -199,7 +198,12 @@ def _call_tool(tool: str, arguments: Dict[str, Any]) -> Any:
         timeout=_TIMEOUT_S,
     )
 
-    results = _response_results(outer)
+    return _response_results(outer)
+
+
+def _call_tool(tool: str, arguments: Dict[str, Any]) -> Any:
+    """Preserve the single-resource contract of existing quote callers."""
+    results = _call_tool_results(tool, arguments)
     if len(results) > 1:
         raise ValueError("gildata raw-api returned multiple results for one resource; refusing a partial series")
     return results[0] if results else {}
@@ -332,8 +336,8 @@ class DataLoader:
         pass
 
     def is_available(self) -> bool:
-        """Available when ``GILDATA_TOKEN`` is set to a non-placeholder value."""
-        return _token() not in GILDATA_TOKEN_PLACEHOLDERS
+        """Available for explicit quote requests after the user enables them."""
+        return feature_available("market_quotes")
 
     def fetch(
         self,
@@ -374,7 +378,7 @@ class DataLoader:
             return {}
 
         if not self.is_available():
-            logger.warning("gildata fetch skipped: %s not set", _TOKEN_ENV)
+            logger.warning("Gildata quotes require a token and the market_quotes opt-in")
             return {}
 
         def _a_share_fetch(symbol: str) -> Callable[[], Optional[pd.DataFrame]]:

@@ -72,7 +72,9 @@ def child_env() -> dict[str, str]:
 _PROTOCOL = (
     "\n\n## Tool-calling protocol\n"
     "You cannot execute tools yourself; the host executes them and returns the "
-    "results in the next turn. Respond with action=tool_calls and the calls you "
+    "results in the next turn. The CLI's native tools are disabled: never call "
+    "them, and never interpret their refusal as host tools being unavailable. "
+    "Respond with action=tool_calls and the calls you "
     "want (name + arguments that match the tool's JSON schema), or action=final "
     "with your complete answer in content once you have what you need.\n"
     "Available tools (OpenAI function format):\n"
@@ -245,7 +247,7 @@ def _schema(allow_tools: bool) -> dict[str, Any]:
 class _Decision:
     content: str = ""
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
-    usage: dict[str, int] = field(
+    usage: dict[str, Any] = field(
         default_factory=lambda: {
             "input_tokens": 0,
             "output_tokens": 0,
@@ -333,22 +335,42 @@ def _run_cli(
     return payload
 
 
-def _usage(payload: dict[str, Any]) -> dict[str, int]:
+def _usage(payload: dict[str, Any]) -> dict[str, Any]:
     usage = payload.get("usage") or {}
-    tokens_in = sum(
-        int(usage.get(k) or 0)
-        for k in (
-            "input_tokens",
-            "cache_creation_input_tokens",
-            "cache_read_input_tokens",
+    creation = usage.get("cache_creation") or {}
+    cache_creation = int(usage.get("cache_creation_input_tokens") or 0)
+    if "cache_creation_input_tokens" not in usage:
+        cache_creation = sum(
+            int(creation.get(key, usage.get(key)) or 0)
+            for key in ("ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens")
         )
-    )
+    cache_read = int(usage.get("cache_read_input_tokens") or 0)
+    tokens_in = int(usage.get("input_tokens") or 0) + cache_creation + cache_read
     tokens_out = int(usage.get("output_tokens") or 0)
-    return {
+    result: dict[str, Any] = {
         "input_tokens": tokens_in,
         "output_tokens": tokens_out,
         "total_tokens": tokens_in + tokens_out,
     }
+    if cache_creation or cache_read:
+        result["input_token_details"] = {
+            "cache_read": cache_read,
+            "cache_creation": cache_creation,
+        }
+    return result
+
+
+def _native_attempt_reason(payload: dict[str, Any]) -> str:
+    """Identify a native tool attempt without parsing the model's prose."""
+    if payload.get("permission_denials"):
+        return "permission_denials is non-empty"
+    turns = payload.get("num_turns")
+    if isinstance(turns, int) and turns > 2:
+        # Ordinary structured responses can already report two turns. Only
+        # turns beyond the model-plus-StructuredOutput baseline are a fallback
+        # signal when the CLI does not itemize the denied calls.
+        return f"num_turns={turns}"
+    return ""
 
 
 def _decide(
@@ -379,26 +401,36 @@ def _decide(
     for _ in range(_MAX_RETRIES + 1):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise RuntimeError(f"claude-cli: decision exceeded {timeout:.0f}s")
-        payload = _run_cli(
-            system=system,
-            user_input=user_input,
-            allow_tools=allow_tools,
-            model=model,
-            effort=effort,
-            timeout=remaining,
-            cancel_event=cancel_event,
-        )
+            error = RuntimeError(f"claude-cli: decision exceeded {timeout:.0f}s")
+            error.usage_metadata = decision.usage
+            raise error
+        try:
+            payload = _run_cli(
+                system=system,
+                user_input=user_input,
+                allow_tools=allow_tools,
+                model=model,
+                effort=effort,
+                timeout=remaining,
+                cancel_event=cancel_event,
+            )
+        except Exception as exc:
+            exc.usage_metadata = decision.usage
+            raise
         if payload.get("cancelled"):
             return None
-        # The loop reads input_tokens as the current context size; summing the
-        # re-sent prompt over feedback retries would double it and compact early.
         attempt = _usage(payload)
-        decision.usage["input_tokens"] = attempt["input_tokens"]
-        decision.usage["output_tokens"] += attempt["output_tokens"]
-        decision.usage["total_tokens"] = (
-            decision.usage["input_tokens"] + decision.usage["output_tokens"]
-        )
+        # Billing accumulates every invocation; compaction uses only the last
+        # prompt, not the sum of prompts resent during feedback retries.
+        decision.usage["context_input_tokens"] = attempt["input_tokens"]
+        decision.usage["calls"] = decision.usage.get("calls", 0) + 1
+        for key in ("input_tokens", "output_tokens", "total_tokens"):
+            decision.usage[key] += attempt[key]
+        for key in ("input_token_details", "output_token_details"):
+            if key in attempt:
+                details = decision.usage.setdefault(key, {})
+                for name, count in attempt[key].items():
+                    details[name] = details.get(name, 0) + count
         output = payload["structured_output"]
         calls = (
             (output.get("tool_calls") or [])
@@ -406,6 +438,17 @@ def _decide(
             else []
         )
         if not calls:
+            native_reason = _native_attempt_reason(payload) if allow_tools else ""
+            if native_reason:
+                user_input += (
+                    "\n\n[host] Native tool calls were attempted and refused; none was executed "
+                    f"({native_reason}). This does not mean the host tools are unavailable or broken. "
+                    "Do not call the CLI's native tools. Reply again with action=tool_calls "
+                    "using the host-provided schemas, or action=final with a complete answer "
+                    "in content if no tool is needed."
+                )
+                failure = f"native tool calls kept bypassing the host protocol ({native_reason})"
+                continue
             # Under --json-schema, payload["result"] is the structured output as text, so
             # an empty content must not fall back to it: the user would see raw JSON.
             content = str(output.get("content") or "")
@@ -436,7 +479,9 @@ def _decide(
             + "\nChoose different calls or answer with what you have."
         )
         failure = "tool calls kept violating the host policy: " + "; ".join(notes)
-    raise RuntimeError(f"claude-cli: {failure}")
+    error = RuntimeError(f"claude-cli: {failure}")
+    error.usage_metadata = decision.usage
+    raise error
 
 
 class ClaudeCliLLM:

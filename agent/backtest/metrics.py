@@ -39,7 +39,7 @@ _TRADING_DAYS = {
     "fmp": 252, "stooq": 252, "longbridge": 252,
     # resampling sources (local files / paid data — interval depends on source
     # data granularity; model as US equity session as a conservative default)
-    "local": 252, "qveris": 252,
+    "local": 252,
     # Indian equity
     "india_broker": 252,
     # Korean equity (KRX)
@@ -60,7 +60,7 @@ _BARS_PER_DAY = {
     #  --- US/international equity (6.5h session) ---
     "1m":  {"yfinance": 390, "yahoo": 390, "finnhub": 390, "alphavantage": 390,
             "tiingo": 390, "fmp": 390, "stooq": 390, "longbridge": 390,
-            "local": 390, "qveris": 390,
+            "local": 390,
             # A-share equity (4.0h session)
             "tushare": 240, "gildata": 240, "akshare": 240, "baostock": 240, "tencent": 240,
             "eastmoney": 240, "sina": 240, "mootdx": 240, "futu": 240,
@@ -78,7 +78,7 @@ _BARS_PER_DAY = {
             },
     "5m":  {"yfinance": 78,  "yahoo": 78,  "finnhub": 78,  "alphavantage": 78,
             "tiingo": 78,  "fmp": 78,  "stooq": 78,  "longbridge": 78,
-            "local": 78, "qveris": 78,
+            "local": 78,
             "tushare": 48, "gildata": 48,  "akshare": 48,  "baostock": 48,  "tencent": 48,
             "eastmoney": 48,  "sina": 48,  "mootdx": 48,  "futu": 48,
             "okx": 288,  "ccxt": 288,  "binance": 288,
@@ -91,7 +91,7 @@ _BARS_PER_DAY = {
             },
     "15m": {"yfinance": 26,  "yahoo": 26,  "finnhub": 26,  "alphavantage": 26,
             "tiingo": 26,  "fmp": 26,  "stooq": 26,  "longbridge": 26,
-            "local": 26, "qveris": 26,
+            "local": 26,
             "tushare": 16, "gildata": 16,  "akshare": 16,  "baostock": 16,  "tencent": 16,
             "eastmoney": 16,  "sina": 16,  "mootdx": 16,  "futu": 16,
             "okx": 96,   "ccxt": 96,   "binance": 96,
@@ -104,7 +104,7 @@ _BARS_PER_DAY = {
             },
     "30m": {"yfinance": 13,  "yahoo": 13,  "finnhub": 13,  "alphavantage": 13,
             "tiingo": 13,  "fmp": 13,  "stooq": 13,  "longbridge": 13,
-            "local": 13, "qveris": 13,
+            "local": 13,
             "tushare": 8, "gildata": 8,   "akshare": 8,   "baostock": 8,   "tencent": 8,
             "eastmoney": 8,   "sina": 8,   "mootdx": 8,   "futu": 8,
             "okx": 48,   "ccxt": 48,   "binance": 48,
@@ -117,7 +117,7 @@ _BARS_PER_DAY = {
             },
     "1H":  {"yfinance": 7,   "yahoo": 7,   "finnhub": 7,   "alphavantage": 7,
             "tiingo": 7,   "fmp": 7,   "stooq": 7,   "longbridge": 7,
-            "local": 7, "qveris": 7,
+            "local": 7,
             "tushare": 4, "gildata": 4,   "akshare": 4,   "baostock": 4,   "tencent": 4,
             "eastmoney": 4,   "sina": 4,   "mootdx": 4,   "futu": 4,
             "okx": 24,   "ccxt": 24,   "binance": 24,
@@ -130,7 +130,7 @@ _BARS_PER_DAY = {
             },
     "4H":  {"yfinance": 2,   "yahoo": 2,   "finnhub": 2,   "alphavantage": 2,
             "tiingo": 2,   "fmp": 2,   "stooq": 2,   "longbridge": 2,
-            "local": 2, "qveris": 2,
+            "local": 2,
             "tushare": 1,   "gildata": 1,  "akshare": 1,   "baostock": 1,   "tencent": 1,
             "eastmoney": 1,   "sina": 1,   "mootdx": 1,   "futu": 1,
             "okx": 6,    "ccxt": 6,    "binance": 6,
@@ -143,7 +143,7 @@ _BARS_PER_DAY = {
             },
     "1D":  {"yfinance": 1,   "yahoo": 1,   "finnhub": 1,   "alphavantage": 1,
             "tiingo": 1,   "fmp": 1,   "stooq": 1,   "longbridge": 1,
-            "local": 1, "qveris": 1,
+            "local": 1,
             "tushare": 1,   "gildata": 1,  "akshare": 1,   "baostock": 1,   "tencent": 1,
             "eastmoney": 1,   "sina": 1,   "mootdx": 1,   "futu": 1,
             "okx": 1,    "ccxt": 1,    "binance": 1,
@@ -236,8 +236,14 @@ def effective_bars_per_year(index: Any, default: int = 252) -> int:
         diff = index[-1] - index[0]
     except (IndexError, TypeError):
         return default
-    calendar_days = diff.days if hasattr(diff, "days") else 0
-    years = calendar_days / 365.25 if calendar_days > 0 else 1.0
+    # ``diff.days`` truncates the fractional day off the span, which turns the
+    # denominator into whole calendar days elapsed rather than the calendar
+    # years this function's contract names — on an intraday series that
+    # inflates the factor (72 hourly bars span 2d23h, not 2d).
+    calendar_days = (
+        diff.total_seconds() / 86400.0 if hasattr(diff, "total_seconds") else 0.0
+    )
+    years = calendar_days / 365.25 if calendar_days >= 1.0 else 1.0
     return int(n / years) if years > 0 else default
 
 
@@ -304,6 +310,49 @@ def bar_returns(close: Any, *, label: str = "") -> Any:
     # equal to within floating-point error.
     ret = close / positive_prev - 1
     return ret.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+
+def entry_returns(
+    close: pd.Series,
+    open_: Optional[pd.Series] = None,
+    traded: Optional[pd.Series] = None,
+    *,
+    label: str = "",
+) -> pd.Series:
+    """Per-bar returns of a position bought at the first traded bar's open.
+
+    A benchmark starts from cash at the same moment the strategy does, before
+    the first evaluated bar opens, and the earliest price it can buy at is that
+    bar's open -- the price the engine itself fills the strategy at. Grading it
+    from the previous close credits it with a move it could not have held
+    (with a warm-up boundary that close is a warm-up bar), and grading it from
+    the first close drops a move the strategy did hold.
+
+    Args:
+        close: Closes over the evaluated window; may carry a price through a
+            short gap.
+        open_: Opens on the same index. ``None``, NaN or a non-positive open
+            means the position is bought at that bar's close instead.
+        traded: Bars on which the instrument actually traded; defaults to
+            ``close.notna()``. The first of them is the entry bar.
+        label: Name for the non-positive-price warning in ``bar_returns``.
+
+    Returns:
+        Returns on ``close``'s index: 0.0 before the entry bar,
+        ``close / open - 1`` on it, then ``bar_returns`` from its close on.
+    """
+    ret = bar_returns(close, label=label)
+    traded = close.notna() if traded is None else traded.reindex(close.index).fillna(False).astype(bool)
+    if not traded.any():
+        return ret * 0.0
+    entry = int(np.argmax(traded.to_numpy()))
+    ret.iloc[:entry + 1] = 0.0
+    if open_ is not None:
+        entry_open = float(open_.reindex(close.index).iloc[entry])
+        entry_close = float(close.iloc[entry])
+        if np.isfinite(entry_open) and entry_open > 0 and np.isfinite(entry_close):
+            ret.iloc[entry] = entry_close / entry_open - 1.0
+    return ret
 
 
 def buy_and_hold_return(close: Any) -> Optional[float]:

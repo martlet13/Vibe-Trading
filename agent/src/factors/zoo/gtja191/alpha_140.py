@@ -66,7 +66,7 @@ def compute(panel):
     v = panel["volume"]
     left = rank(decay_linear((rank(o) + rank(l)) - (rank(h) + rank(c)), 8))
     inner = ts_corr(ts_rank(c, 8), ts_rank(ts_mean(v, 60), 20), 8)
-    right = ts_rank(decay_linear(ts_rank(inner, 7), 7), 3)
+    right = ts_rank(decay_linear(inner, 7), 3)
     arr = np.minimum(left.to_numpy(dtype=np.float64, na_value=np.nan),
                      right.to_numpy(dtype=np.float64, na_value=np.nan))
     out = pd.DataFrame(arr, index=left.index, columns=left.columns)

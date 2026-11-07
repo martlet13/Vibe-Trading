@@ -510,13 +510,23 @@ def max_drawdown_analysis(equity: pd.Series | np.ndarray | Sequence[float]) -> d
         "recovered": recovery_pos is not None,
         "peak_to_trough_periods": trough_pos - peak_pos,
         "trough_to_recovery_periods": None if recovery_pos is None else recovery_pos - trough_pos,
-        "underwater_days": int((index[trough_pos] - index[peak_pos]).days) if is_dated else None,
+        "underwater_days": _civil_days(index[trough_pos], index[peak_pos]) if is_dated else None,
         "recovery_days": (
-            int((index[recovery_pos] - index[trough_pos]).days)
+            _civil_days(index[recovery_pos], index[trough_pos])
             if is_dated and recovery_pos is not None
             else None
         ),
     }
+
+
+def _civil_days(later, earlier) -> int:
+    """Whole calendar days from ``earlier`` to ``later``.
+
+    ``Timedelta.days`` counts 24-hour blocks. Across a spring-forward, midnight
+    to the next midnight is 23 hours and that count is 0, so a drawdown that
+    lasted the whole civil day was reported as underwater for none.
+    """
+    return (pd.Timestamp(later).date() - pd.Timestamp(earlier).date()).days
 
 
 def monte_carlo_gbm(

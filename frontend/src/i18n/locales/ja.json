@@ -1,6 +1,21 @@
 {
+  "gildata": {
+    "partner": "データパートナー · Gildata",
+    "website": "MCPの利用と登録",
+    "features": "Gildataのオプション機能",
+    "optInHelp": "9つの機能はすべて初期設定で無効です。アップグレード前にトークンを保存していても、使う機能を個別に有効にしてください。相場データを有効にしても、Gildataを明示した場合のみ利用します。無料ソースで取得できない場合の自動切り替えはありません。",
+    "fund_nav": "投資信託の基準価額",
+    "macro_series": "中国のマクロ経済指標",
+    "announcements": "企業・ファンドの公告",
+    "broker_reports": "証券会社の調査レポート",
+    "market_quotes": "相場データ（Gildataを明示した場合のみ）",
+    "fin_query": "財務・市場データの一括照会",
+    "stock_selection": "銘柄スクリーニング",
+    "symbol_search": "銘柄検索にGildataの候補を含める",
+    "shannon": "保有銘柄の診断（Shannon）"
+  },
   "app": {
-    "version": "v0.1.18"
+    "version": "v0.1.19"
   },
   "navigation": {
     "menu": "機能を見る",
@@ -23,7 +38,8 @@
       "runtime": "ブローカーの接続と取引の稼働状況を確認します。",
       "settings": "モデル、データソース、ブローカー接続を設定します。",
       "pixelOffice": "調査タスクを計画・割り当てます。割り当てでは実行は始まりません。役職はラベルであり、取引権限を付与しません。",
-      "paperTrading": "仮想資金で日次取引を検証します。証券会社へ注文は送りません。現金配当を含まず、総収益ではありません。"
+      "paperTrading": "仮想資金で日次取引を検証します。証券会社へ注文は送りません。現金配当を含まず、総収益ではありません。",
+      "researchArtifacts": "証拠に基づく分析をセッション間で保存して再利用します。"
     },
     "instructions": {
       "reports": "まずアシスタントに戦略のバックテストを依頼し、ここで結果を開きます。会話で作成した PDF などは元の会話からダウンロードします。",
@@ -35,7 +51,8 @@
       "runtime": "先に設定または保有資産ページでブローカーを接続します。利用できる取引操作はブローカーの機能とあなたの許可に依存します。",
       "settings": "まずモデルを設定します。必要に応じてデータソースやブローカー接続を追加します。公開市場のリサーチにはブローカー口座は不要です。",
       "pixelOffice": "調査タスクを計画・割り当てます。割り当てでは実行は始まりません。役職はラベルであり、取引権限を付与しません。",
-      "paperTrading": "確定した日足のみを使用します。戦略は前日までのデータを読み、執行日の終値で約定します。通常の取引終了から30分お待ちください。自動実行は設定されません。"
+      "paperTrading": "確定した日足のみを使用します。戦略は前日までのデータを読み、執行日の終値で約定します。通常の取引終了から30分お待ちください。自動実行は設定されません。",
+      "researchArtifacts": "過去の分析を検索し、任意のリビジョンを開くか、新しい証拠で関連リビジョンを作成します。古い結論は変更されません。"
     }
   },
   "layout": {
@@ -67,7 +84,41 @@
     "about": "概要",
     "sessionsLoadFailed": "会話を読み込めません。",
     "pixelOffice": "ピクセルオフィス",
-    "paperTrading": "模擬取引"
+    "paperTrading": "模擬取引",
+    "researchArtifacts": "リサーチ成果物"
+  },
+  "researchArtifacts": {
+    "subject": "研究主題",
+    "dataAsOf": "データ基準日",
+    "saving": "保存中…",
+    "saveError": "リサーチ成果物を保存できません。",
+    "evidenceMissing": "証拠参照がありません",
+    "createdNotice": "リビジョン {{id}} を作成しました。",
+    "emptyHint": "分析を保存すると、後のセッションで結論と証拠を再利用できます。",
+    "emptyTitle": "リサーチ成果物はまだありません",
+    "save": "リサーチを保存",
+    "universe": "ユニバース（任意）",
+    "loadError": "リサーチ成果物を読み込めません。",
+    "formTitleNew": "リサーチを保存",
+    "verification": "検証状態",
+    "additionalEvidence": "追加の証拠 URI（1行に1件）",
+    "revise": "このリビジョンから新しいリビジョンを作成",
+    "completeness": "完全性",
+    "searchPlaceholder": "主題・ユニバース・本文を検索",
+    "newResearch": "新規リサーチ",
+    "formTitleRevision": "関連リビジョンを作成",
+    "content": "研究本文",
+    "subtitle": "証拠に基づく分析をセッション間で再利用し、過去のリビジョンを上書きしません。",
+    "history": "リビジョン履歴",
+    "optionalLinks": "任意の関連 ID",
+    "title": "リサーチ成果物",
+    "close": "閉じる",
+    "idempotentNotice": "同一の内容と 出典情報 は {{id}} に既に存在します。",
+    "evidence": "根拠資料",
+    "hypothesis_id": "仮説 ID",
+    "goal_id": "目標 ID",
+    "session_id": "セッション ID",
+    "run_id": "実行 ID"
   },
   "runtime": {
     "monitorBadge": "取引モニター",
@@ -405,6 +456,7 @@
     "taskSubtitle": "銘柄・戦略・ポートフォリオについて聞いてください。データ取得から計算まで、すべての手順をお見せします。",
     "quickActions": "クイックアクション",
     "browseAllExamples": "すべての例を見る",
+    "featured": "おすすめの例",
     "greetings": {
       "morning1": "おはようございます。",
       "morning2": "おはようございます。いつでもどうぞ。",
@@ -465,6 +517,9 @@
     "reasoningEffortHigh": "高",
     "reasoningEffortXhigh": "超高",
     "reasoningEffortMax": "最大",
+    "reasoningEffortMinimal": "最小",
+    "reasoningEffortUltra": "超高",
+    "reasoningEffortPersistent": "持続",
     "reasoningEffortDesc": "対応モデルの推論の深さを調整します。高いほど複雑な分析に有効な場合がありますが、時間がかかります。未対応のプロバイダーでは無視されることがあります。「なし（明示）」は推論を無効にしたままフィールドを明示送信し、一部の OpenAI モデルはツール利用時にこれが必要です。",
     "reasoningEffortReset": "選択したモデルは {{level}} に対応していないため、プロバイダーのデフォルトに戻しました。",
     "localApiAccess": "ローカル API アクセス",
@@ -1112,29 +1167,6 @@
     "apiKey": "APIキー",
     "tushareTokenDesc": "中国A株・先物・ファンド・マクロデータに使用します。未設定の場合、利用可能なところではAKShareにフォールバックします。",
     "gildataTokenDesc": "任意の Gildata データ：A株の調整済み日足、香港株・指数の未調整価格、店頭投資信託の基準価額、中国のマクロ経済・公告・調査レポートツール。"
-  },
-  "qveris": {
-    "title": "QVeris ツールマーケットプレイス",
-    "subtitle": "無料の公開データを既定のまま使い、必要なときだけ QVeris の有料実行を有効にします。",
-    "enabled": "QVeris 有料ルートを有効化",
-    "baseUrl": "ベース URL",
-    "apiKey": "API キー",
-    "apiKeyPlaceholder": "空欄で現在のキーを保持",
-    "mode": "モード",
-    "modeFree": "無料公開データのみ",
-    "modePaid": "QVeris 有料を有効化",
-    "budget": "セッションごとの予算 Credits",
-    "budgetHint": "このセッション予算に達すると有料実行を停止します。",
-    "balance": "残り Credits",
-    "recentUsage": "最近の使用量",
-    "noUsage": "最近の使用量はありません",
-    "signupCta": "登録を開く",
-    "signupHint": "QVeris アカウント作成時にこの招待コードを使用してください。",
-    "inviteCode": "招待コード",
-    "save": "QVeris 設定を保存",
-    "saved": "QVeris 設定を保存しました",
-    "testFailed": "QVeris リクエストに失敗しました",
-    "notConfigured": "未設定"
   },
   "agent": {
     "reasoningStrength": "推論強度",
@@ -2052,9 +2084,6 @@
     "pattern": "チャートパターンを検出",
     "portfolio_risk_xray": "ポートフォリオリスクを精査",
     "propose_mandate_profiles": "取引マンデートを提案",
-    "qveris_execute": "QVeris アクションを実行",
-    "qveris_inspect": "QVeris アクションを確認",
-    "qveris_search": "QVeris を検索",
     "read_document": "ドキュメントを読む",
     "read_file": "ファイルを読む",
     "read_url": "Web ページを読む",
@@ -2206,6 +2235,15 @@
       "failed": "読み取れませんでした — 合計に含まれていません",
       "lastSuccess": "最後に読み取れたのは {{time}}",
       "noSuccess": "まだ一度も読み取れていません",
+      "cashDetails": "現金と信用枠",
+      "reportingCurrency": "報告通貨",
+      "financingLimit": "信用取引枠",
+      "financingRemaining": "残りの信用取引枠",
+      "cashAvailable": "利用可能な現金",
+      "cashWithdrawable": "出金可能な現金",
+      "cashFrozen": "凍結中の現金",
+      "cashSettling": "決済待ちの現金",
+      "binanceRestrictedLocation": "Binance が読み取りを拒否しました（HTTP 451）。現在のネットワーク所在地は利用制限の対象です。お住まいの地域で Binance が利用可能か確認し、サポート対象の公式 API エンドポイントを使用してください。",
       "reconnect": "再接続",
       "retryRead": "再読み込み"
     },
@@ -2312,6 +2350,7 @@
       "testFailed": "{{label}} のテストに失敗しました: {{error}}",
       "unknownTestError": "コネクターが不明なエラーを返しました。",
       "delete": "削除",
+      "deleteInUse": "この接続を「口座の保有資産」から外して変更を保存してから、接続を削除してください。",
       "configured": "必要な認証情報は設定済みです",
       "accountTitle": "口座",
       "accountCurrent": "末尾 ····{{last4}} の口座を読み取ります",
@@ -2324,7 +2363,9 @@
       "accountDefault": "・ブローカーの既定",
       "accountDeactivated": "・無効化済み",
       "accountSave": "この口座を使う",
-      "accountSaved": "口座を保存しました。"
+      "accountSaved": "口座を保存しました。",
+      "host": "ホスト",
+      "port": "ポート"
     },
     "imports": {
       "title": "extraETF Investments をインポート",
@@ -2349,7 +2390,8 @@
       "current": "現在の評価額",
       "targetValue": "目標額",
       "change": "変更額"
-    }
+    },
+    "quoteAsOf": "{{time}} 時点の価格"
   },
   "analysis": {
     "updated": "更新済み",
@@ -2534,5 +2576,65 @@
     "us": "米国株 · USD",
     "hk": "香港株 · HKD",
     "cn_a": "中国A株 · CNY"
+  },
+  "shannon": {
+    "regionLabel": "Shannon 保有銘柄診断",
+    "title": "ポートフォリオのスタイルとリスク",
+    "intro": "Gildata MCP の Shannon サービスを利用して、ポートフォリオのスタイル傾向、個別銘柄の特徴、ポートフォリオのボラティリティがどの保有銘柄に集中しているかを確認します。",
+    "notConfigured": "診断を利用するには Gildata トークンを設定してください。既存の相関分析は引き続き利用できます。",
+    "holdingsLabel": "保有する中国A株",
+    "holdingsHint": "1行に1銘柄ずつ、コードとウェイトを入力します。ウェイトをすべて空欄にすると等ウェイトで推計します。指定する場合はすべての銘柄に入力し、合計を100%にしてください。A株のみ対応しており、現金やその他の資産を自動で除外することはありません。",
+    "holdingsInvalid": "上の形式に従って、コード、重複銘柄、ウェイトを確認してください。",
+    "dateLabel": "分析基準日（任意）",
+    "dateHint": "入力した保有銘柄をこの日のデータで分析します。当時実際に保有していたことを示すものではありません。",
+    "dateLatestHint": "空欄の場合は最新の利用可能データを使用します",
+    "publishedThrough": "データ更新：{{date}} まで",
+    "useLatest": "最新データを使用",
+    "analyze": "保有銘柄を診断",
+    "analyzing": "分析中…",
+    "retry": "再試行",
+    "serviceUnavailable": "サービスを一時的に利用できません。再試行してください。",
+    "analysisDate": "実際の分析日 {{date}}",
+    "included": "対象 {{included}}/{{requested}} 銘柄",
+    "equalWeight": "等ウェイトで推計",
+    "enteredWeights": "入力ウェイトで分析",
+    "riskDate": "リスク推計日 {{date}}",
+    "dateFallback": "指定日 {{requested}}、実際に使用したデータ日 {{actual}}。",
+    "partial": "一部の銘柄が対象外になりました。以下のモデル結果はカバーされた部分のみを表しており、ポートフォリオ全体の姿ではありません。",
+    "coveredWeight": "カバーされた入力ウェイト {{weight}}。",
+    "sourceLimitations": "データソースから今回の分析に制約があると報告されました。結果は参考としてご覧ください。",
+    "styleTitle": "ポートフォリオのスタイル・エクスポージャー",
+    "styleAxis": "低い ← モデル基準 0 → 高い",
+    "styleNote": "赤は高め、緑は低めを示し、中心線から離れるほど傾向が強くなります。値は標準化された特性であり、構成比や騰落の予測ではありません。マーケット・ベータも標準化値で、回帰で求めた生のベータではありません。欠損またはカバー不足は — で表示します。",
+    "viewStockStyles": "個別銘柄のスタイルを表示",
+    "heatmapTitle": "個別銘柄スタイル・エクスポージャーのヒートマップ",
+    "heatmapNote": "各行が銘柄、各列がファクターで、並び順は上図と同じです。赤は高め、緑は低めを示し、色は ±2 で飽和しますが値は切り詰めません。個別銘柄の特徴を示すもので、その銘柄のリスク寄与の分解ではありません。",
+    "missingData": "データ欠損",
+    "noStockStyle": "利用できる個別銘柄のスタイルデータがありません。",
+    "riskTitle": "リスク・アトリビューション：ボラティリティの要因",
+    "mainContributor": "返された銘柄のうち、ポートフォリオのボラティリティへの推計寄与が最も大きいのは {{name}} です。",
+    "riskNote": "ポートフォリオのボラティリティがどこに集中しているかを把握し、該当する構成比を優先して見直すための表示です。構成比は資金の配分割合、ボラティリティ寄与率は銘柄のボラティリティ寄与 ÷ ポートフォリオ全体のボラティリティです。バーは本図の最大寄与を基準に表示します。",
+    "diversifying": "分散効果",
+    "addingVolatility": "ボラティリティを押し上げ",
+    "zeroContribution": "寄与ゼロ",
+    "riskFootnote": "寄与の絶対値が大きい上位5銘柄を表示します。寄与率は損失確率ではなく、売却によるリスク低下幅の予測でもありません。マイナスや100%超になることもあり、上位5銘柄の合計が100%になるとは限りません。マイナスの寄与は分散効果を表します。個別銘柄固有のリスクには共通のボラティリティ仮定を用いています。",
+    "noData": "利用できるデータがありません。欠損値をゼロとして扱うことはありません。",
+    "colStock": "銘柄",
+    "colAllocation": "構成比",
+    "colContribution": "寄与",
+    "colShare": "ボラティリティ寄与率",
+    "colShareLabel": "ポートフォリオのボラティリティ寄与率",
+    "factors": {
+      "BETA": "マーケット・ベータ",
+      "VALUE": "バリュー",
+      "GROWTH": "グロース",
+      "QUALITY": "クオリティ",
+      "MOMENTUM_12M": "12か月モメンタム",
+      "MOMENTUM_6M": "6か月モメンタム",
+      "VOLATILITY": "ボラティリティ",
+      "LIQUIDITY": "流動性",
+      "SIZE": "サイズ",
+      "LEVERAGE": "レバレッジ"
+    }
   }
 }

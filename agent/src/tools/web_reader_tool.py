@@ -11,6 +11,7 @@ import requests
 
 from src.agent.progress import emit_progress
 from src.agent.tools import BaseTool
+from src.tools._arguments import boolean_argument
 from src.security.scanner import with_security_warnings
 
 logger = logging.getLogger(__name__)
@@ -162,4 +163,8 @@ class WebReaderTool(BaseTool):
 
     def execute(self, **kwargs) -> str:
         """Fetch web page."""
-        return read_url(kwargs["url"], no_cache=bool(kwargs.get("no_cache", False)))
+        try:
+            no_cache = boolean_argument(kwargs.get("no_cache", False), field="no_cache")
+        except ValueError as exc:
+            return json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False)
+        return read_url(kwargs["url"], no_cache=no_cache)

@@ -297,6 +297,43 @@ def account_total_usd(
     return total if total > 0 else fallback
 
 
+def account_balance_details(broker: str, account: dict[str, Any]) -> list[dict[str, Any]]:
+    """Expose reported cash legs and financing without adding them to totals.
+
+    Args:
+        broker: Connector whose balance schema is being read.
+        account: Connector-reported account payload.
+
+    Returns:
+        Balance disclosures in their original currencies; unavailable amounts
+        remain None, and negative balances retain their sign.
+    """
+    if broker != "longbridge":
+        return []
+
+    def amount(value: Any) -> float | None:
+        parsed = _decimal(value, Decimal("NaN"))
+        return float(parsed) if parsed.is_finite() else None
+
+    details = []
+    for row in account.get("balances", []):
+        details.append({
+            "currency": row.get("currency"),
+            "max_finance_amount": amount(row.get("max_finance_amount")),
+            "remaining_finance_amount": amount(row.get("remaining_finance_amount")),
+            "cash_infos": [
+                {
+                    "currency": cash.get("currency"),
+                    **{key: amount(cash.get(key)) for key in (
+                        "available_cash", "withdraw_cash", "frozen_cash", "settling_cash"
+                    )},
+                }
+                for cash in row.get("cash_infos") or []
+            ],
+        })
+    return details
+
+
 def account_cash_usd(broker: str, account: dict[str, Any], rates: Rates) -> Decimal:
     """Return broker-reported cash without guessing from missing quotes.
 

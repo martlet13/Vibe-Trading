@@ -7,7 +7,7 @@
 """GTJA Alpha 101 (国泰君安 191 短周期交易型 alpha 因子, 2014).
 
 Formula (verbatim from the report):
-    ((RANK(CORR(close, SUM(MEAN(volume,30),37), 15)) < RANK(CORR(RANK(high), RANK(MEAN(volume,10)),11))) * -1)
+    ((RANK(CORR(CLOSE, SUM(MEAN(VOLUME,30), 37), 15)) < RANK(CORR(RANK(((HIGH * 0.1) + (VWAP * 0.9))), RANK(VOLUME), 11))) * -1)
 
 Notes: Inequality cast to float via .astype('float64').
 """
@@ -33,6 +33,7 @@ from src.factors.base import (
     ts_min,
     ts_rank,
     ts_std,
+    vwap,
 )
 
 ALPHA_ID = "gtja191_101"
@@ -40,7 +41,7 @@ ALPHA_ID = "gtja191_101"
 __alpha_meta__ = {
     'id': 'gtja191_101',
     'theme': ['volume', 'momentum'],
-    'formula_latex': '((rank(ts\\_corr(close, sum(ts\\_mean(volume,30),37), 15)) < rank(ts\\_corr(rank(high), rank(ts\\_mean(volume,10)), 11))) * -1)',
+    'formula_latex': '((rank(ts\\_corr(close, sum(ts\\_mean(volume,30),37), 15)) < rank(ts\\_corr(rank(high*0.1 + vwap*0.9), rank(volume), 11))) * -1)',
     'columns_required': ['open', 'high', 'low', 'close', 'volume', 'amount'],
     'extras_required': [],
     'universe': ['equity_cn'],
@@ -64,8 +65,9 @@ def compute(panel):
     h = panel["high"]
     v = panel["volume"]
     left = rank(ts_corr(c, ts_mean(v, 30).rolling(37).sum(), 15))
-    right = rank(ts_corr(rank(h), rank(ts_mean(v, 10)), 11))
+    vw = vwap(panel, "equity_cn")
+    right = rank(ts_corr(rank(h * 0.1 + vw * 0.9), rank(v), 11))
     out = (left < right).astype("float64") * -1.0
     # Reach of each input through the nested windows; a gap inside it is not a verdict (#1463).
-    # v: mean 30 + sum 37 + corr 15; c: corr 15; h: corr 11.
-    return out.where(observed_over((v, 80), (c, 15), (h, 11)))
+    # v: mean 30 + sum 37 + corr 15; c: corr 15; h, vwap: corr 11.
+    return out.where(observed_over((v, 80), (c, 15), (h, 11), (vw, 11)))

@@ -68,3 +68,37 @@ def test_connector_setup_prompts_locally_and_never_writes_secrets_to_registry(
     assert "key-value" not in registry
     assert "secret-value" not in registry
     assert "passphrase-value" not in registry
+
+
+def test_connector_setup_saves_the_endpoint_used_by_the_agent_read_path(tmp_path, monkeypatch):
+    from src.trading import connections
+    from src.tools import trading_connector_tool
+
+    store = ConnectionStore(tmp_path / "connections.json", credential_store=CredentialStore(_MemoryCredentials()))
+    monkeypatch.setattr(connections, "ConnectionStore", lambda: store)
+    args = _legacy._build_parser().parse_args(
+        [
+            "connector",
+            "setup",
+            "ibkr-paper-local",
+            "--connection-id",
+            "gateway",
+            "--host",
+            "localhost",
+            "--port",
+            "4002",
+            "--skip-check",
+        ]
+    )
+    monkeypatch.setattr(_legacy, "_ensure_cli_env", lambda: None)
+    assert _legacy._dispatch_connector(args) == _legacy.EXIT_SUCCESS
+    assert store.get("gateway").endpoint == {"host": "localhost", "port": 4002}
+    seen = []
+
+    def read_account(config):
+        seen.append((config.host, config.port, config.readonly))
+        return {"status": "ok", "account": {}}
+
+    monkeypatch.setattr("src.trading.connectors.ibkr.local.get_account_snapshot", read_account)
+    trading_connector_tool.TradingAccountTool().execute(connection="ibkr-paper-local", connection_id="gateway")
+    assert seen == [("localhost", 4002, True)]

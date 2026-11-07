@@ -22,6 +22,7 @@ import uuid
 from typing import Any
 
 from src.agent.tools import BaseTool
+from src.tools._arguments import boolean_argument
 from src.live.mandate.commit import _normalize_limits, save_proposal
 
 #: Ordered profile templates synthesized when the caller gives no explicit
@@ -124,9 +125,8 @@ class ProposeMandateProfilesTool(BaseTool):
         intent = str(kwargs.get("intent") or "").strip()
         session_id = kwargs.get("session_id")
         reauth_for = kwargs.get("reauth_for") if isinstance(kwargs.get("reauth_for"), dict) else None
-        flatten_on_halt = bool(kwargs.get("flatten_on_halt", False))
-
         try:
+            flatten_on_halt = boolean_argument(kwargs.get("flatten_on_halt", False), field="flatten_on_halt")
             profiles = self._synthesize_profiles(ceilings, reauth_for, flatten_on_halt)
         except (TypeError, ValueError) as exc:
             return json.dumps(

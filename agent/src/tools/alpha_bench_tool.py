@@ -46,6 +46,12 @@ from backtest.loaders.cn_adjust import apply_qfq as _apply_qfq
 from src.agent.tools import BaseTool
 from src.config.accessor import get_env_config
 from src.config.paths import get_runtime_root
+from src.factors.data_availability import build_availability_contract
+from src.factors.research_contract import (
+    RESEARCH_MODES,
+    RESEARCH_STAGES,
+    build_bench_research_contract,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -625,6 +631,10 @@ def _load_btc_panel(start: str, end: str) -> dict[str, pd.DataFrame]:
     panel = _wide_from_fetched(fetched, include_amount=False)
     if all(k in panel for k in ("open", "high", "low", "close")):
         panel["vwap"] = (panel["open"] + panel["high"] + panel["low"] + panel["close"]) / 4.0
+    panel["_meta"] = {
+        "universe": "btc-usdt",
+        "price_source": getattr(loader, "name", None) or "crypto",
+    }
     return panel
 
 
@@ -1264,6 +1274,19 @@ def run_alpha_bench(**kwargs: Any) -> dict[str, Any]:
     if not period or not isinstance(period, str):
         return {"status": "error", "error": "period is required (string)"}
 
+    research_mode = kwargs.get("research_mode", "explore")
+    research_stage = kwargs.get("research_stage", "single_factor_evaluation")
+    if research_mode not in RESEARCH_MODES:
+        return {
+            "status": "error",
+            "error": f"research mode must be one of {RESEARCH_MODES}",
+        }
+    if research_stage not in RESEARCH_STAGES:
+        return {
+            "status": "error",
+            "error": f"research stage must be one of {RESEARCH_STAGES}",
+        }
+
     try:
         _parse_period(period)
     except ValueError as exc:
@@ -1375,6 +1398,35 @@ def run_alpha_bench(**kwargs: Any) -> dict[str, Any]:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     report_path = output_dir / f"alpha_bench_{ts}_{secrets.token_hex(16)}.html"
 
+    required_fields = sorted(
+        {
+            str(column)
+            for aid in alpha_ids
+            for column in (registry.get(aid).meta or {}).get("columns_required", [])
+        }
+    )
+    panel_meta = panel.get("_meta") if isinstance(panel, dict) else None
+    universe_meta = dict(panel_meta) if isinstance(panel_meta, dict) else {}
+    universe_meta["data_availability"] = build_availability_contract(
+        panel,
+        universe=universe,
+        period=period,
+        required_fields=required_fields,
+    )
+    try:
+        universe_meta["research"] = build_bench_research_contract(
+            mode=research_mode,
+            stage=research_stage,
+            universe=universe,
+            period=period,
+            factor_ids=alpha_ids,
+            zoo=kwargs.get("zoo"),
+            horizon=horizon,
+            method="rank_ic",
+        )
+    except ValueError as exc:
+        return {"status": "error", "error": str(exc)}
+
     context = {
         "csp": _CSP,
         "css": _REPORT_CSS,
@@ -1385,6 +1437,7 @@ def run_alpha_bench(**kwargs: Any) -> dict[str, Any]:
         "n_skipped": len(failures),
         "top": top,
         "failures": failures[:10],
+        "meta": universe_meta,
     }
 
     try:
@@ -1404,6 +1457,7 @@ def run_alpha_bench(**kwargs: Any) -> dict[str, Any]:
         "horizon": horizon,
         "forward_return_sampling": "non_overlapping" if horizon > 1 else "daily",
         "top": top,
+        "meta": universe_meta,
     }
     if universe_excluded:
         envelope["universe_excluded"] = universe_excluded
@@ -1452,6 +1506,16 @@ class AlphaBenchTool(BaseTool):
                     "non-overlapping (end-anchored); 21 ≈ monthly, the "
                     "conventional horizon for fundamental factors. Range 1-252."
                 ),
+            },
+            "research_stage": {
+                "type": "string",
+                "enum": list(RESEARCH_STAGES),
+                "default": "single_factor_evaluation",
+                "description": "Stage recorded in the factor-research contract.",
+            },
+            "research_mode": {
+                "type": "string", "enum": list(RESEARCH_MODES), "default": "explore",
+                "description": "Declared research mode; metadata only, does not enforce locked evaluation.",
             },
             "output_dir": {
                 "type": "string",

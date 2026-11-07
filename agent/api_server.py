@@ -8,6 +8,7 @@ infrastructure lives in ``src.api.{security,models,helpers,state}``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -163,6 +164,16 @@ async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await _stop_scheduled_research_on_shutdown()
+        # Reap background work this host owns before its runtime disappears.
+        # Read the existing service rather than _get_session_service(): a
+        # shutdown must not create the very object it is trying to release.
+        import src.api.state as _api_state
+
+        service = getattr(_api_state, "_session_service", None)
+        if service is not None:
+            pending = await asyncio.to_thread(service.shutdown, timeout=5.0)
+            if pending:
+                logger.warning("Background cleanup incomplete at shutdown: %s", pending)
 
 
 app = FastAPI(
@@ -200,6 +211,9 @@ register_attribution_routes(app)
 # --- Sessions ---
 from src.api.sessions_routes import register_sessions_routes  # noqa: E402
 register_sessions_routes(app)
+
+from src.api.research_artifact_routes import register_research_artifact_routes  # noqa: E402
+register_research_artifact_routes(app)
 
 from src.api.sessions_routes import (  # noqa: F401, E402
     _goal_store,
@@ -248,8 +262,6 @@ from src.api.channels_routes import register_channels_routes  # noqa: E402
 register_channels_routes(app)
 from src.api.channels_config_routes import register_channels_config_routes  # noqa: E402
 register_channels_config_routes(app)
-from src.api.qveris_routes import qveris_router  # noqa: E402  # QVERIS-INTEGRATION
-app.include_router(qveris_router)  # QVERIS-INTEGRATION
 
 from src.api.channels_routes import (  # noqa: F401, E402
     ChannelPairingCommandRequest,
@@ -311,6 +323,9 @@ register_alpha_routes(app)
 # --- Options analysis ---
 from src.api.options_routes import register_options_routes  # noqa: E402
 register_options_routes(app)
+
+from src.api.shannon_routes import register_shannon_routes  # noqa: E402
+register_shannon_routes(app, require_auth)
 
 # --- Auth helpers (SSE tickets) ---
 from src.api.auth_routes import register_auth_routes  # noqa: E402

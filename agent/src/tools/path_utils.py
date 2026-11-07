@@ -27,8 +27,9 @@ _ALLOWED_WRITE_ROOTS_ENV = "VIBE_TRADING_ALLOWED_WRITE_ROOTS"
 
 # MCP clients spawn the server themselves, so a shell export never reaches it.
 _ENV_SCOPE_HINT = (
-    "Under an MCP client, set it in that client's server env block — "
-    "exporting it in a shell does not reach the spawned server."
+    "Put it in the runtime .env (read by both the web and MCP servers) or "
+    "in the MCP client's server env block — exporting it in a shell does not "
+    "reach a spawned MCP server."
 )
 
 # The env var that widens each resolve_safe_path purpose; rejections name it
@@ -204,6 +205,12 @@ def allowed_write_roots() -> list[Path]:
     return roots
 
 
+def _fallback_candidate(file_path: str, base: Path) -> Path:
+    """Resolve a fallback against the supplied run directory, not the CWD."""
+    candidate = Path(file_path).expanduser()
+    return (candidate if candidate.is_absolute() else base / candidate).resolve()
+
+
 def resolve_safe_path(
     file_path: str,
     run_dir: str | None,
@@ -232,11 +239,13 @@ def resolve_safe_path(
 
     # Try resolving against run_dir if provided
     if run_dir:
+        # A rejected network path must never enter the fallback resolver.
+        _rejects_unc(run_dir)
         try:
             run_root = safe_run_dir(run_dir)
         except ValueError as exc:
             # If safe_run_dir fails, check if the path is in allowed_roots first
-            candidate = Path(file_path).expanduser().resolve()
+            candidate = _fallback_candidate(file_path, Path(run_dir).expanduser())
             for root in allowed_roots:
                 contained = _contained_path(candidate, root)
                 if contained is not None:
@@ -247,7 +256,7 @@ def resolve_safe_path(
             return safe_path(file_path, run_root)
         except ValueError as exc:
             # Fallback to allowed roots if safe_path containment fails
-            candidate = Path(file_path).expanduser().resolve()
+            candidate = _fallback_candidate(file_path, run_root)
             for root in allowed_roots:
                 contained = _contained_path(candidate, root)
                 if contained is not None:

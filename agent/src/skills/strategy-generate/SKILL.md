@@ -77,6 +77,7 @@ class SignalEngine:
 - Do not include an `if __name__ == "__main__"` block
 - Pure pandas / numpy implementation, with no external signal libraries
 - Output plain Python code, not Markdown fences
+- Set each bar's signal from data up to that bar's close, and do not shift it yourself. The engine already delays signals by one bar: a signal set on bar `t` is filled at the open of bar `t+1`. A strategy that shifts its own signal (`.shift(1)`, or `signal[i]` taken from the condition at `i - 1`) fills every trade one bar later than intended, even when a "next open" rule is described
 
 ## Quality Checklist
 
@@ -87,6 +88,7 @@ Self-check after writing `signal_engine.py`:
 - [ ] Boundary handling: for empty data or insufficient history before the lookback window, use `fillna(0)` or skip
 - [ ] Portfolio strategy: once N stocks are selected, each weight = 1/N (for example top 10 → each 0.1), unselected names = 0
 - [ ] Signal values stay within `[-1.0, 1.0]`
+- [ ] The signal is not shifted: the engine fills a signal set on bar `t` at the open of bar `t+1`
 
 ## Instrument Code Normalization
 
@@ -167,7 +169,9 @@ Self-check after writing `signal_engine.py`:
 - `artifact_id`: optional. Set it only when the run benches an artifact registered with `sdm_register`; the backtest then records its metrics in that artifact's bench history. `bench_type` (`"initial"` / `"periodic"` / `"manual"`, default `"manual"`) states whether the run counts towards decay monitoring, which reads only `initial` and `periodic` runs. Omit both for exploratory runs.
 - `initial_cash`: default 1,000,000
 - `commission`: default 0.1%
+- Crypto: `commission` sets both fee sides unless `maker_rate` / `taker_rate` explicitly override that side. Bare spot pairs such as `BTC-USDT` do not pay funding by default. `-PERP`, `-SWAP`, CCXT settled contract codes and strict perpetual mode retain funding; a nonzero explicit `funding_rate` also opts a bare pair into a perpetual proxy assumption. `crypto_funding_pnl` in metrics reports the signed funding actually applied, separately from trade P&L.
 - `hk_lot_sizes`: optional, Hong Kong only — `{"00700.HK": 100, "02800.HK": 500}`. HK board lots are set per issuer, so without this table every HK order is rounded to 100 shares and a name whose real lot is smaller than its target trades zero times. Codes match with or without leading zeros. Every symbol with no configured lot size uses 100 shares and is listed under `lot_assumptions` in the metrics, including runs without a table. Reports must identify these as assumptions rather than verified exchange lots.
+- Argentina (BYMA `.BA` codes, e.g. `"YPFD.BA"`): use `"source": "yahoo"` and keep `"engine": "daily"`; `.BA` codes select the BYMA engine. Local shares can take their kind from Yahoo's descriptor (ARS, one-share lots as an assumption). Declare `ar_tick_table` as `"2024-07-04"`, `"2025-09-08-leader"` (leader panel / CEDEARs) or `"2025-09-08-general"`, or an instrument-specific `tick_table` / positive `tick_size`. These are explicit rule assumptions: choose the applicable table/panel for the window and split runs across rule changes; panel membership and effective dates are not inferred. `commission` is the brokerage rate; `ar_exchange_fee_rate`, `ar_fixed_fee` and `ar_slippage` add costs. Settlement is T+2 (T+1 from 2024-05-27) counted in observed trading sessions, an approximation rather than an official calendar. Settlement is not a ban on reselling acquired shares; CEDEAR credit dates still restrict exits, including terminal liquidation. `artifacts/cash_ledger.csv` reports each fill's cash flow and settlement session (`beyond_loaded_data` past the last bar). **CEDEARs** (e.g. `"AAPL.BA"`) must be declared: `"ar_instruments": {"AAPL.BA": {"kind": "cedear", "underlying": "AAPL", "ratio_history": [{"effective_date": "YYYY-MM-DD", "ratio": "20", "credit_date": "YYYY-MM-DD"}]}}`, with ratios from the issuer's notices. A `BYMA backtest configuration incomplete` error lists every missing key at once: ask the user for them rather than guessing. Report the `ar_data_basis` metric's labels (declared / vendor / assumption).
 - `validation`: optional statistical validation after backtest completes. Omit to skip. Example:
   ```json
   "validation": {
@@ -204,6 +208,7 @@ Self-check after writing `signal_engine.py`:
 2. **Late first trade** (first trade > 2 years after backtest start): data-filtering bug or overly long lookback window
 3. **Capital utilization < 50%**: position-management bug, portfolio is flat most of the time
 4. **Open position at the end** (positions still open when backtest ends): exit-signal timing bug
+5. **Double delay** (`signal_engine.py` shifts its own signal): every fill lands one bar later than the strategy describes, because the engine already fills a signal set on bar `t` at the open of bar `t+1`
 
 ### `action_items` Format
 

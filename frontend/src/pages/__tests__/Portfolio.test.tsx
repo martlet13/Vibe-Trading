@@ -138,6 +138,51 @@ const portfolioConfiguration = {
 };
 
 describe("Portfolio page", () => {
+  it("shows the quote timestamp and pricing failure beside the position", async () => {
+    mocked.getPortfolio.mockResolvedValue({ status: "ok", snapshot: {
+      ...snapshot,
+      positions: [{ ...snapshot.positions[0], price_as_of: "2026-10-12T21:00:00Z", price_error: "quote symbol does not match" }],
+    } });
+    render(<Portfolio />);
+    expect(await screen.findByText(/Quote as of/)).toBeInTheDocument();
+    expect(screen.getByText("quote symbol does not match")).toBeInTheDocument();
+  });
+
+  it("shows reported cash legs without replacing missing values or netting currencies", async () => {
+    mocked.getPortfolio.mockResolvedValue({ status: "ok", snapshot: {
+      ...snapshot,
+      accounts: [{ ...snapshot.accounts[1], balance_details: [{
+        currency: "HKD", max_finance_amount: 5000, remaining_finance_amount: 0,
+        cash_infos: [
+          { currency: "USD", available_cash: 1000, withdraw_cash: null, frozen_cash: 0, settling_cash: 0 },
+          { currency: "HKD", available_cash: -500, withdraw_cash: -600, frozen_cash: 500, settling_cash: -200 },
+        ],
+      }] }],
+    } });
+    render(<Portfolio />);
+    const summary = await screen.findByText(i18n.t("portfolio.accounts.cashDetails"));
+    const details = summary.closest("details")!;
+    fireEvent.click(summary);
+    expect(details.textContent).toContain("HKD");
+    expect(details.textContent).toContain("USD");
+    const amounts = within(details).getAllByText(i18n.t("portfolio.accounts.cashAvailable")).map((label) => label.nextElementSibling!);
+    expect(amounts[0].textContent).toContain("1,000");
+    expect(amounts[1].textContent).toMatch(/^-.*500\.00$/);
+    expect(amounts[1]).toHaveClass("text-danger");
+    expect(within(details).getAllByText(i18n.t("portfolio.accounts.cashWithdrawable"))[0].nextElementSibling).toHaveTextContent("—");
+    expect(within(details).getByText("Remaining financing").nextElementSibling).toHaveTextContent("0.00");
+  });
+
+  it("explains Binance's region restriction using the typed failure code", async () => {
+    mocked.getPortfolio.mockResolvedValue({ status: "ok", snapshot: {
+      ...snapshotWithFailedSource,
+      accounts: [{ ...snapshotWithFailedSource.accounts.at(-1)!, error_code: "binance_restricted_location", error: "connector fallback text" }],
+    } });
+    render(<Portfolio />);
+    expect(await screen.findByText(i18n.t("portfolio.accounts.binanceRestrictedLocation"))).toBeInTheDocument();
+    expect(screen.queryByText("connector fallback text")).not.toBeInTheDocument();
+  });
+
   it("exports the displayed observation by id and reports a revoked snapshot", async () => {
     const context = { snapshot_id: "snap-1", totals: { usd: 1000 }, read_identity: { mode: "pinned" } };
     mocked.getPortfolioAnalysisContext.mockResolvedValue({ status: "ok", context });

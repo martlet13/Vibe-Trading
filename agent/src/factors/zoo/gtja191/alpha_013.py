@@ -29,6 +29,7 @@ from src.factors.base import (
     ts_min,
     ts_rank,
     ts_std,
+    vwap,
 )
 
 __alpha_meta__ = {
@@ -49,6 +50,6 @@ def compute(panel: dict) -> pd.DataFrame:
     h = panel["high"]
     l = panel["low"]
     v = panel["volume"]
-    vw = safe_div(panel["amount"], v * 100.0 + 1.0)
+    vw = vwap(panel, "equity_cn")
     geo = signed_power(h * l, 0.5)
     return geo - vw

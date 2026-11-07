@@ -29,6 +29,7 @@ from src.factors.base import (
     ts_min,
     ts_rank,
     ts_std,
+    vwap,
 )
 
 __alpha_meta__ = {
@@ -48,7 +49,7 @@ __alpha_meta__ = {
 def compute(panel: dict) -> pd.DataFrame:
     l = panel["low"]
     v = panel["volume"]
-    vw = safe_div(panel["amount"], v * 100.0 + 1.0)
+    vw = vwap(panel, "equity_cn")
     t1 = ts_rank(decay_linear(ts_corr(l, ts_mean(v, 10), 7), 6), 4)
     t2 = ts_rank(decay_linear(delta(vw, 3), 10), 15)
     return t1 + t2

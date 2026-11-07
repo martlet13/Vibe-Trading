@@ -852,6 +852,25 @@ def _balance_to_dict(item: Any) -> dict[str, Any]:
         "buy_power": _float_or_none(_first(item, ("buy_power",))),
         "init_margin": _float_or_none(_first(item, ("init_margin",))),
         "maintenance_margin": _float_or_none(_first(item, ("maintenance_margin",))),
+        "max_finance_amount": _float_or_none(_first(item, ("max_finance_amount",))),
+        "remaining_finance_amount": _float_or_none(
+            _first(item, ("remaining_finance_amount",))
+        ),
+        # total_cash nets every currency into one figure; a negative leg
+        # (borrowing) only shows here.
+        "cash_infos": [
+            _cash_info_to_dict(info) for info in _as_iter(_first(item, ("cash_infos",)))
+        ],
+    }
+
+
+def _cash_info_to_dict(item: Any) -> dict[str, Any]:
+    return {
+        "currency": _first(item, ("currency",)),
+        "available_cash": _float_or_none(_first(item, ("available_cash",))),
+        "withdraw_cash": _float_or_none(_first(item, ("withdraw_cash",))),
+        "frozen_cash": _float_or_none(_first(item, ("frozen_cash",))),
+        "settling_cash": _float_or_none(_first(item, ("settling_cash",))),
     }
 
 

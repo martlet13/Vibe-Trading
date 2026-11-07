@@ -69,7 +69,6 @@ from __future__ import annotations
 import ast
 import logging
 import math
-import multiprocessing
 import sys
 import types
 from dataclasses import dataclass, field
@@ -83,6 +82,7 @@ from .engine import (
     EngineError, MatchOutcome, build_day_plan, error_outcome, readiness_error, run_day_loop)
 from .limits_cn_a import CnALimitsClient
 from .schema import AccountState, Order, PaperTradeStepRequest
+from .strategy_process import start_strategy_process
 
 __all__ = [
     "DEFAULT_DAY_TIMEOUT_SECONDS", "StrategyContext", "StrategyContractError", "StrategyOrder",
@@ -408,6 +408,17 @@ class _StrategyDayFailure(RuntimeError):
         self.class_name = class_name
 
 
+class _UniverseViolation(RuntimeError):
+    # Internal carrier from _execute_days to run_strategy_path; a strategy
+    # order outside the declared 5m UNIVERSE is an authoring error, not a
+    # suspended symbol.  The whole call fails in-band before any fill.
+    def __init__(self, day: str, symbols: tuple[str, ...], allowed: Collection[str]) -> None:
+        super().__init__(f"strategy order outside the 5m universe on {day}")
+        self.day = day
+        self.symbols = tuple(symbols)
+        self.allowed = tuple(sorted(allowed))
+
+
 def _execute_days(
     request: PaperTradeStepRequest,
     market_data: data.MarketDataResult,
@@ -417,6 +428,7 @@ def _execute_days(
     day_timeout: float,
     ctx_symbols: tuple[str, ...],
     run_loop: Any,
+    allowed_five: frozenset[str] | None = None,
 ) -> MatchOutcome:
     payload = {
         "source": source,
@@ -424,18 +436,14 @@ def _execute_days(
         "days": days,
         "symbols": ctx_symbols,
     }
-    # spawn (never fork): forking a threaded MCP server is POSIX-undefined
-    # behavior (#1355 lesson); spawn is the only start method on Windows and
-    # the default on macOS, pinned here so Linux behaves identically.
-    context = multiprocessing.get_context("spawn")
-    parent_conn, child_conn = context.Pipe(duplex=True)
-    proc = context.Process(target=_child_main, args=(child_conn, payload), daemon=True)
-    started = False
+    # A fresh interpreter with private stdin/stdout pipes never inherits the
+    # MCP transport's blocked stdin read (Windows #2089). Never fork a threaded
+    # server, and never run a user's strategy in the server process.
     try:
-        proc.start()
-        started = True
-        # Close the parent's duplicate child endpoint so child death reads as EOF.
-        child_conn.close()
+        proc, parent_conn = start_strategy_process(payload)
+    except OSError as exc:
+        raise _StrategyDayFailure(days[0], StrategyProcessError.__name__) from exc
+    try:
         msg = _recv(parent_conn, max(_STARTUP_TIMEOUT_SECONDS, day_timeout))
         if msg is _TIMEOUT:
             raise _StrategyDayFailure(days[0], None)
@@ -459,16 +467,18 @@ def _execute_days(
                 raise _StrategyDayFailure(msg[1], msg[2])
             if msg[0] != "day" or msg[1] != day:
                 raise _StrategyDayFailure(day, StrategyProcessError.__name__)
-            return tuple(StrategyOrder(**item) for item in msg[2])
+            orders = tuple(StrategyOrder(**item) for item in msg[2])
+            if allowed_five is not None:
+                outside = sorted({order.symbol for order in orders} - allowed_five)
+                if outside:
+                    raise _UniverseViolation(day, tuple(outside), allowed_five)
+            return orders
         return run_loop(order_provider=provide_orders)
     finally:
-        if started:
-            if proc.is_alive():
-                proc.kill()  # SIGKILL: really interrupts a hung day (no cooperative unwind)
-            proc.join(_JOIN_TIMEOUT_SECONDS)
-            proc.close()
+        if proc.poll() is None:
+            proc.kill()  # Really interrupts a hung day; no cooperative unwind.
+        proc.wait(timeout=_JOIN_TIMEOUT_SECONDS)
         parent_conn.close()
-        child_conn.close()
 
 
 def _resolve_timeout(timeout_seconds: float | None) -> float:
@@ -539,7 +549,11 @@ def run_strategy_path(
             orders_by_day={}, fee_model=request.fee_model,
             calendar_client=calendar_client, limits_client=limits_client,
             corporate_action_unresolved_by_day=corporate_action_unresolved_by_day,
-            hk_lot_sizes=hk_lot_sizes, **kwargs)
+            hk_lot_sizes=hk_lot_sizes,
+            path_model=request.path_model, fill_model=request.fill_model, **kwargs)
+    allowed_five = (
+        frozenset(market_data.five_minute_symbols)
+        if request.interval == "5m" else None)
     if days:
         # The declared UNIVERSE joins the child's ctx.symbols (sorted union
         # with the served universe), extracted from THE SAME single source
@@ -548,7 +562,16 @@ def run_strategy_path(
         ctx_symbols = tuple(sorted(set(market_data.symbols) | set(_declared_universe(source))))
         try:
             return _execute_days(
-                request, market_data, days, path, source, day_timeout, ctx_symbols, run_loop)
+                request, market_data, days, path, source, day_timeout, ctx_symbols, run_loop,
+                allowed_five=allowed_five)
+        except _UniverseViolation as violation:
+            message = (
+                f"strategy orders on {', '.join(violation.symbols)} are outside the 5m UNIVERSE "
+                f"({', '.join(violation.allowed) or 'empty'}); declare them in UNIVERSE "
+                "or use interval=1d")
+            logger.warning("paper_trade strategy 5m universe violation on %s: %s",
+                           violation.day, message)
+            return _strategy_error(request, market_data, message)
         except _StrategyDayFailure as failure:
             message = (f"strategy_execution_timeout:{failure.day}"
                        if failure.class_name is None

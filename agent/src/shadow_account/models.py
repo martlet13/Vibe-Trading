@@ -16,6 +16,45 @@ from typing import Any
 #: keeps the three modules from drifting apart.
 PRICE_FEATURES: tuple[str, ...] = ("entry_rsi14", "prior_5d_return")
 
+#: Canonical comparison spellings accepted inside an ``entry_condition`` value.
+#: This is the shared *spelling* vocabulary: the live scanner and the generated
+#: signal engine both parse operators through this table, so neither side
+#: invents its own names. Honouring an operator is a separate matter —
+#: ``scanner._compare`` evaluates every canonical operator, whereas the
+#: generated engine expresses the inclusive subset (``>=`` / ``<=``) only and
+#: raises for anything else.
+COMPARISON_ALIASES: dict[str, str] = {
+    ">": ">",
+    "gt": ">",
+    ">=": ">=",
+    "gte": ">=",
+    "ge": ">=",
+    "<": "<",
+    "lt": "<",
+    "<=": "<=",
+    "lte": "<=",
+    "le": "<=",
+    "==": "==",
+    "=": "==",
+    "eq": "==",
+    "!=": "!=",
+    "<>": "!=",
+    "ne": "!=",
+}
+
+
+def canonical_comparison(op: Any) -> str | None:
+    """Return the canonical operator spelling for *op*, or ``None``.
+
+    Args:
+        op: An operator as written in a rule condition.
+
+    Returns:
+        One of ``>``, ``>=``, ``<``, ``<=``, ``==``, ``!=``; ``None`` when the
+        spelling is not part of the shared grammar.
+    """
+    return COMPARISON_ALIASES.get(str(op).strip().lower())
+
 
 @dataclass(frozen=True)
 class ShadowRule:
@@ -25,8 +64,12 @@ class ShadowRule:
         rule_id: Stable ID like "R1", "R2".
         human_text: Chinese natural-language description (<=30 chars).
         entry_condition: Structured condition dict for codegen. Keys are
-            feature names (e.g. "prior_5d_return", "market"); values are
-            either scalars or (op, value) tuples (e.g. ("<=", -0.08)).
+            feature names (e.g. "prior_5d_return", "market"). For a
+            ``PRICE_FEATURES`` key the value may be a bare scalar (read as
+            ``>=``), an ``(op, value)`` pair, or a ``{"min", "max"}``
+            mapping; the generated engine (``codegen.render_signal_engine``)
+            expresses inclusive bounds only and raises ``ValueError`` for
+            ``>``, ``<``, ``==``, ``!=``. ``market`` must be a string.
         exit_condition: Structured exit condition dict.
         holding_days_range: (min, max) integer days.
         support_count: Number of profitable roundtrips supporting this rule.

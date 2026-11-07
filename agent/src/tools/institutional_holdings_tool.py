@@ -118,6 +118,7 @@ from backtest.loaders.sec_edgar_client import get_submissions
 # place to change them. Both are stable module-level helpers.
 from backtest.loaders.sec_edgar_client import _min_interval, _pad_cik, _user_agent
 from src.agent.tools import BaseTool
+from src.tools._arguments import boolean_argument
 from src.config.accessor import get_env_config
 from src.config.limits import TOOL_RESULT_LIMIT
 from src.tools._result_paging import fit_records
@@ -1940,7 +1941,7 @@ class InstitutionalHoldingsTool(BaseTool):
         if candidates:
             data["other_name_matches"] = candidates
 
-        if kwargs.get("include_changes"):
+        if boolean_argument(kwargs.get("include_changes"), field="include_changes"):
             data["changes"] = self._changes_block(cik, filings, target, positions, budget)
 
         return _envelope("manager_holdings", data, positions[:top_n], "positions", offset)

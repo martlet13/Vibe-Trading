@@ -44,6 +44,7 @@ from backtest.metrics import (
     by_symbol_stats,
     calc_fill_turnover_series,
     calc_metrics,
+    entry_returns,
     period_returns,
 )
 from backtest.models import EquitySnapshot, FillRecord, Position, TradeRecord
@@ -367,6 +368,35 @@ def _align(
     return dates, close, close_val, pos, ret
 
 
+def _basket_entry_returns(
+    close_df: pd.DataFrame, data_map: Dict[str, pd.DataFrame], codes: List[str],
+) -> pd.DataFrame:
+    """Per-symbol returns of the equal-weight basket over the evaluated bars.
+
+    Each symbol is bought at the open of its first traded bar in the window
+    (``metrics.entry_returns``) and marked on the same close matrix the
+    strategy is valued against.
+
+    Args:
+        close_df: Evaluated close matrix from ``_align``.
+        data_map: code -> raw OHLCV DataFrame.
+        codes: Basket symbols, columns of ``close_df``.
+
+    Returns:
+        DataFrame of per-bar returns shaped like ``close_df[codes]``.
+    """
+    columns = {}
+    for code in codes:
+        frame = data_map[code]
+        index = frame.index if frame.index.unit == "ns" else frame.index.as_unit("ns")
+        raw = frame.set_axis(index).reindex(close_df.index)
+        opens = raw["open"] if "open" in raw.columns else None
+        columns[code] = entry_returns(
+            close_df[code], opens, raw["close"].notna(), label=f"benchmark basket {code}",
+        )
+    return pd.DataFrame(columns, index=close_df.index)
+
+
 def _load_optimizer(config: Dict[str, Any]) -> Optional[Callable]:
     """Dynamically load an optimizer function from config.
 
@@ -577,7 +607,52 @@ class BaseEngine(ABC):
         # metrics instead of only to a subclass that overrode the hook.
         self.plan_rejections: Counter = Counter()
         self._bar_idx: int = 0
+        self._bar_ts: Optional[pd.Timestamp] = None  # session being executed
         self._active_symbol: str = ""  # set by _rebalance/_close_position for subclass use
+        # Positions the terminal close was not allowed to sell (see
+        # can_liquidate_at_end). Empty for every market that keeps the default.
+        self.unliquidated_positions: List[Dict[str, Any]] = []
+
+    def available_cash(self, timestamp: pd.Timestamp) -> float:
+        """Spendable funds for an order at timestamp, without changing equity.
+
+        Default preserves legacy immediate-settlement capital across markets.
+        Markets with unsettled receivables may override this hook.
+        """
+        return self.capital
+
+    def projected_reduction_buying_power(
+        self, reductions: list, timestamp: pd.Timestamp,
+    ) -> float:
+        """Incremental buying power from planned closes on this bar.
+
+        Default is the legacy immediate-credit behavior. Settlement-based
+        markets can return zero so a sale never finances a same-bar purchase.
+        """
+        return sum(order.capital_credit for order in reductions)
+
+    def prepare_market_data(
+        self, data_map: Dict[str, pd.DataFrame],
+    ) -> Dict[str, pd.DataFrame]:
+        """Validate or normalize loaded bars before signals see them.
+
+        Default returns the frames untouched, so every market keeps its
+        loader output. A market whose source data needs a documented unit
+        convention (e.g. a depositary-receipt ratio change) overrides this;
+        running before signal generation keeps signals and fills on the
+        same price basis.
+        """
+        return data_map
+
+    def can_liquidate_at_end(self, symbol: str, timestamp: pd.Timestamp) -> bool:
+        """Whether the terminal forced close may sell *symbol* on the last bar.
+
+        Default True keeps the legacy behavior of every market. A market whose
+        securities cannot be sold before settlement overrides this so the
+        end-of-backtest close does not bypass the rule that gates signal exits.
+        Positions it refuses stay open and are valued, not traded.
+        """
+        return True
 
     # ── Market rule interface (subclass must implement) ──
 
@@ -928,6 +1003,7 @@ class BaseEngine(ABC):
             sys.exit(1)
         data_map = _maybe_enrich_fundamentals(data_map, config)
         data_map = _maybe_enrich_events(data_map, config)
+        data_map = self.prepare_market_data(data_map)
 
         # 2. Generate signals
         signal_map = signal_engine.generate(data_map)
@@ -981,55 +1057,42 @@ class BaseEngine(ABC):
             [s.equity for s in self.equity_snapshots],
             index=[s.timestamp for s in self.equity_snapshots],
         )
-        bench_ret = ret_df.mean(axis=1) if ret_df.shape[1] > 0 else pd.Series(0.0, index=dates)
-        benchmark_metadata = {}
-        benchmark_warning: str | None = None
+        # ret_df runs from each bar's previous close, so its first evaluated row
+        # starts at the last warm-up close. The basket instead buys each symbol
+        # at its first traded open in the window, as the strategy can.
+        basket_ret = _basket_entry_returns(close_df, data_map, list(ret_df.columns))
+        bench_ret = basket_ret.mean(axis=1) if basket_ret.shape[1] > 0 else pd.Series(0.0, index=dates)
+        from backtest.benchmark import default_benchmark, resolve_benchmark
 
-        # ── External benchmark fetch ──────────────────────────────────────────
-        bench_ticker = config.get("benchmark")
-        if bench_ticker and bench_ticker != "auto":
-            from backtest.benchmark import resolve_benchmark
-            bench_source = config.get("source", "yfinance")
-            bench_result = resolve_benchmark(
-                strategy_codes=codes,
-                source=bench_source,
-                start_date=config.get("start_date", ""),
-                end_date=config.get("end_date", ""),
-                interval=interval,
-                explicit=bench_ticker,
-                # Explicit source: fetch the benchmark through its own loader
-                # (keeps e.g. source=local offline). Auto keeps the yfinance
-                # default — its loader only wraps the preloaded strategy data.
-                loader=loader if bench_source != "auto" else None,
+        basket_codes = list(ret_df.columns)
+        basket_label = (
+            f"equal-weight basket ({basket_codes[0]})" if len(basket_codes) == 1
+            else f"equal-weight basket of {len(basket_codes)} symbols"
+        )
+        benchmark_metadata = {"benchmark_kind": "equal_weight", "benchmark_label": basket_label}
+        requested = config.get("benchmark")
+        source = config.get("source", "yfinance")
+        ticker = default_benchmark(basket_codes, source) if requested == "auto" else requested
+        reason = "no default benchmark for the evaluated symbols" if requested == "auto" else "no benchmark requested"
+        if ticker:
+            result = resolve_benchmark(
+                strategy_codes=basket_codes, source=source, explicit=ticker,
+                start_date=config.get("start_date", ""), end_date=config.get("end_date", ""),
+                interval=interval, loader=loader if source != "auto" else None,
             )
-            if bench_result is not None:
-                bench_ret = bench_result.ret_series.reindex(dates).fillna(0.0)
-                # The benchmark is fetched over the requested start_date..
-                # end_date, but a declared warm-up boundary makes the EVALUATED
-                # window shorter than that (`dates` is already clipped above).
-                # Grading total_return over the short window against a
-                # benchmark measured over the long one is the mismatched-window
-                # error the warm-up boundary exists to prevent, so re-measure
-                # the benchmark over the same bars. Falls back to the fetched
-                # total only when the overlap is too short to measure.
-                window_ret = bench_result.total_return_over(dates)
+            window_return = result.total_return_over(dates) if result is not None else None
+            if result is not None and window_return is not None:
+                bench_ret = result.returns_over(dates)
                 benchmark_metadata = {
-                    "benchmark_ticker": bench_result.ticker,
-                    "benchmark_return": (
-                        window_ret if window_ret is not None else bench_result.total_ret
-                    ),
+                    "benchmark_kind": "external", "benchmark_label": result.ticker,
+                    "benchmark_ticker": result.ticker, "benchmark_return": window_return,
                 }
             else:
-                # The equal-weight basket stands in for the declared benchmark,
-                # so every benchmark-relative metric (excess_return,
-                # information_ratio, tracking_error, benchmark_beta) is graded
-                # against something the caller did not ask for. Say so.
-                benchmark_warning = (
-                    f"declared benchmark {bench_ticker!r} could not be resolved; "
-                    "benchmark-relative metrics are graded against the "
-                    "equal-weight basket of the traded symbols instead"
-                )
-        # ── External benchmark fetch ──────────────────────────────────────────
+                reason = f"benchmark {ticker!r} could not be resolved over the evaluation window"
+        benchmark_warning = (
+            f"{reason}; benchmark-relative metrics use the {basket_label}"
+            if benchmark_metadata["benchmark_kind"] == "equal_weight" else None
+        )
 
         bench_equity = self.initial_capital * (1 + bench_ret).cumprod()
 
@@ -1122,21 +1185,20 @@ class BaseEngine(ABC):
             )
 
         # Portfolio Studio: risk x-ray over the strategy's average basket.
-        # Short runs and never-invested strategies raise ValueError in the
-        # derivation and simply get no x-ray artifact.
         from backtest.risk_xray import (
             average_invested_weights,
             compute_risk_xray,
             render_risk_xray_markdown,
             write_risk_xray,
         )
+        xray_warning = None
         try:
             basket_weights, avg_invested = average_invested_weights(actual_pos)
             risk_xray = compute_risk_xray(
                 close_df, basket_weights, periods_per_year=bars_per_year,
             )
-        except ValueError:
-            pass
+        except ValueError as exc:
+            xray_warning = f"Risk x-ray unavailable: {exc}"
         else:
             write_risk_xray(run_dir / "artifacts" / "risk_xray.json", risk_xray)
             (run_dir / "artifacts" / "risk_xray.md").write_text(
@@ -1176,6 +1238,8 @@ class BaseEngine(ABC):
             card_warnings.append(config["_run_card_annualisation_warning"])
         if config.get("_run_card_unrecognized_config_warning"):
             card_warnings.append(config["_run_card_unrecognized_config_warning"])
+        if xray_warning:
+            card_warnings.append(xray_warning)
         if benchmark_warning:
             card_warnings.append(benchmark_warning)
         from backtest.run_card import write_run_card
@@ -1235,6 +1299,7 @@ class BaseEngine(ABC):
 
         for i, ts in enumerate(dates):
             self._bar_idx = i
+            self._bar_ts = ts
 
             stop_run = self.before_rebalance_bar(ts, data_map, codes)
             execute_targets = execution_dates is None or ts in execution_dates
@@ -1323,7 +1388,7 @@ class BaseEngine(ABC):
                 return result
 
             planned = _plans(1.0, observe=True)
-            if sum(order.cost for order in planned) > self.capital + 1e-9:
+            if sum(order.cost for order in planned) > self.available_cash(ts) + 1e-9:
                 # The trial plans of the search are not findings: one starved
                 # open used to be booked as a zero_size rejection on every
                 # bisection step (#1470). The sleeve that leaves the basket is
@@ -1338,7 +1403,7 @@ class BaseEngine(ABC):
                 for _ in range(50):
                     mid = (low + high) / 2.0
                     candidate = _plans(mid, observe=False)
-                    if sum(order.cost for order in candidate) <= self.capital + 1e-9:
+                    if sum(order.cost for order in candidate) <= self.available_cash(ts) + 1e-9:
                         low, fitting = mid, candidate
                     else:
                         high = mid
@@ -1398,6 +1463,8 @@ class BaseEngine(ABC):
         if len(dates) > 0:
             _last_row = min(self._bar_idx, len(dates) - 1)
             last_ts = dates[_last_row]
+            self.unliquidated_positions = []
+            retained_value = 0.0
             for c in list(self.positions.keys()):
                 pos = self.positions[c]
                 mark_price = self._safe_price(
@@ -1407,23 +1474,46 @@ class BaseEngine(ABC):
                 )
                 self._active_symbol = c
                 exit_price = self.apply_slippage(mark_price, -pos.direction)
+                if not self.can_liquidate_at_end(c, last_ts):
+                    # The market's sell rule (e.g. unsettled securities) also
+                    # binds the terminal close: keep the position open and
+                    # value it at what a close would net, without booking a
+                    # trade the rules would not have allowed.
+                    proceeds = self._close_proceeds(pos, exit_price)
+                    retained_value += proceeds
+                    self.unliquidated_positions.append({
+                        "symbol": c,
+                        "size": pos.size,
+                        "entry_price": pos.entry_price,
+                        "mark_price": mark_price,
+                        "estimated_exit_price": exit_price,
+                        "estimated_net_proceeds": proceeds,
+                    })
+                    continue
                 self._close_position(c, exit_price, last_ts, "end_of_backtest")
 
             # The final snapshot feeds metrics and artifacts.  Replace its
             # pre-liquidation mark with post-liquidation cash so terminal
             # slippage and exit commission are reflected in reported equity.
             if self.equity_snapshots:
+                terminal_equity = self.capital + retained_value
                 self.equity_snapshots[-1] = EquitySnapshot(
                     timestamp=last_ts,
                     capital=self.capital,
-                    unrealized=0.0,
-                    equity=self.capital,
-                    positions=0,
+                    unrealized=terminal_equity - self.capital - sum(
+                        self._calc_margin(p.symbol, p.size, p.entry_price, p.leverage)
+                        for p in self.positions.values()
+                    ),
+                    equity=terminal_equity,
+                    positions=len(self.positions),
                 )
             if self.actual_position_snapshots:
-                self.actual_position_snapshots[-1] = (
-                    last_ts, {code: 0.0 for code in codes}
-                )
+                final_weights = {code: 0.0 for code in codes}
+                if self.positions and self.equity_snapshots[-1].equity > 1e-12:
+                    final_weights = self._actual_weights(
+                        close_df, last_ts, codes, self.equity_snapshots[-1].equity
+                    )
+                self.actual_position_snapshots[-1] = (last_ts, final_weights)
 
         # Clean up temporary instance attributes
         self._close_arr = None
@@ -1557,7 +1647,7 @@ class BaseEngine(ABC):
 
         if target_dir != 0 and symbol not in self.positions:
             order = self._plan_open_order(symbol, target_weight, df, ts, equity)
-            if order is not None and order.cost <= self.capital + 1e-9:
+            if order is not None and order.cost <= self.available_cash(ts) + 1e-9:
                 self._execute_open_order(order, ts)
 
     def _plan_open_order(
@@ -1803,15 +1893,15 @@ class BaseEngine(ABC):
                 reductions.append(self._plan_reduction(before, target_size, price))
 
         projected_capital = (
-            self.capital
-            + sum(order.capital_credit for order in reductions)
+            self.available_cash(ts)
+            + self.projected_reduction_buying_power(reductions, ts)
             - sum(order.cost for order in opens)
         )
         self._validate_rebalance_values(projected_capital)
         if projected_capital < -1e-9:
             fitted = self._fit_rebalance_opens(opens, reductions, ts)
             if fitted is None:
-                if sum(order.capital_credit for order in reductions) < 0:
+                if self.projected_reduction_buying_power(reductions, ts) < 0:
                     # The reductions themselves consume cash (a close whose loss
                     # exceeds its margin): no dropping of opens repairs that, so
                     # the bar aborts atomically as #1274 decided.
@@ -1868,10 +1958,10 @@ class BaseEngine(ABC):
         (#1274), and otherwise — cash was already below zero — drops every
         open and still runs the reductions (#1542).
         """
-        released = sum(order.capital_credit for order in reductions)
+        released = self.projected_reduction_buying_power(reductions, ts)
 
         def _fits(candidate: list[_OpenOrder]) -> bool:
-            projected = self.capital + released - sum(order.cost for order in candidate)
+            projected = self.available_cash(ts) + released - sum(order.cost for order in candidate)
             self._validate_rebalance_values(projected)
             return projected >= -1e-9
 
@@ -1970,7 +2060,7 @@ class BaseEngine(ABC):
         before = self.positions[order.symbol]
         if order.direction != before.direction:
             raise ValueError("position increase direction must match the open position")
-        if order.cost > self.capital + 1e-7:
+        if order.cost > self.available_cash(ts) + 1e-7:
             raise RuntimeError(
                 f"planned order for {order.symbol} exceeds available capital"
             )
@@ -2068,7 +2158,7 @@ class BaseEngine(ABC):
 
     def _execute_open_order(self, order: _OpenOrder, ts: pd.Timestamp) -> None:
         """Commit a previously priced opening order."""
-        if order.cost > self.capital + 1e-7:
+        if order.cost > self.available_cash(ts) + 1e-7:
             raise RuntimeError(
                 f"planned order for {order.symbol} exceeds available capital"
             )
@@ -2137,6 +2227,19 @@ class BaseEngine(ABC):
         )
         frame.index.name = "timestamp"
         return frame
+
+    def _close_proceeds(self, pos: Position, exit_price: float) -> float:
+        """Capital a close at *exit_price* would return, without closing.
+
+        Mirrors the credit in ``_close_position`` (margin + pnl - exit
+        commission) so a position valued this way is worth exactly what the
+        close would have booked.
+        """
+        self._active_symbol = pos.symbol
+        pnl = self._calc_pnl(pos.symbol, pos.direction, pos.size, pos.entry_price, exit_price)
+        margin = self._calc_margin(pos.symbol, pos.size, pos.entry_price, pos.leverage)
+        exit_comm = self.calc_commission(pos.size, exit_price, pos.direction, is_open=False)
+        return margin + pnl - exit_comm
 
     def _close_position(
         self,
@@ -2323,7 +2426,7 @@ class BaseEngine(ABC):
                 "timestamp": str(t.entry_time.date()) if hasattr(t.entry_time, "date") else str(t.entry_time),
                 "code": t.symbol,
                 "side": "buy" if t.direction == 1 else "sell",
-                "price": round(entry_price, 4),
+                "price": entry_price,
                 "qty": round(entry_qty, 6),
                 "reason": "signal",
                 "pnl": 0.0,
@@ -2341,7 +2444,7 @@ class BaseEngine(ABC):
                 "timestamp": str(t.exit_time.date()) if hasattr(t.exit_time, "date") else str(t.exit_time),
                 "code": t.symbol,
                 "side": "sell" if t.direction == 1 else "buy",
-                "price": round(t.exit_price, 4),
+                "price": t.exit_price,
                 "qty": round(t.size, 6),
                 "reason": t.exit_reason,
                 "pnl": round(t.pnl, 4),

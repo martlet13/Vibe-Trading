@@ -303,6 +303,18 @@ def test_max_drawdown_drops_nan_and_keeps_the_surviving_index_labels():
     assert result["underwater_days"] == 1
 
 
+def test_underwater_days_survive_a_spring_forward() -> None:
+    # 2024-03-10 00:00 America/New_York to the next midnight is 23 hours, so
+    # Timedelta.days is 0. The curve was underwater for one civil day.
+    index = pd.DatetimeIndex(
+        ["2024-03-10", "2024-03-11", "2024-03-12"], tz="America/New_York"
+    )
+    assert int((index[1] - index[0]).days) == 0
+    result = max_drawdown_analysis(pd.Series([100.0, 80.0, 100.0], index=index))
+    assert result["underwater_days"] == 1
+    assert result["recovery_days"] == 1
+
+
 def test_max_drawdown_rejects_an_all_nan_series():
     with pytest.raises(ValueError, match="no finite observation"):
         max_drawdown_analysis([np.nan, np.nan])

@@ -135,6 +135,21 @@ def test_valuation_skips_zero_and_missing_inputs() -> None:
     assert verify_valuation(price=100, eps=0, bvps=None)["metrics"] == {}
 
 
+def test_yields_are_omitted_when_the_price_is_zero() -> None:
+    # Earnings yield and FCF yield divide by price. A zero price used to raise
+    # decimal.DivisionByZero; dividend yield already omitted itself.
+    metrics = verify_valuation(
+        price=0, eps=2, bvps=10, fcf_per_share=1, dividend=0.5, revenue_per_share=8,
+    )["metrics"]
+    assert "earnings_yield_pct" not in metrics
+    assert "FCF_yield_pct" not in metrics
+    assert "dividend_yield_pct" not in metrics
+    assert metrics["PE"] == 0
+    assert metrics["P_FCF"] == 0
+    assert metrics["PS"] == 0
+    assert metrics["ROE_pct"] == pytest.approx(20)
+
+
 # ── cross_validate ────────────────────────────────────────────────────────
 
 

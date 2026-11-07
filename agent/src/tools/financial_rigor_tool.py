@@ -61,10 +61,18 @@ def _err(msg: str) -> str:
 
 
 def _exact(value: Any) -> Decimal:
-    """Convert any numeric to an exact Decimal, avoiding float binary traps."""
-    if isinstance(value, Decimal):
-        return value
-    return Decimal(str(value))
+    """Convert any numeric to an exact Decimal, avoiding float binary traps.
+
+    Raises:
+        ValueError: If ``value`` is a bool or is NaN / infinite, so a bad input
+            becomes an error envelope instead of an ``ok`` verdict.
+    """
+    if isinstance(value, bool):
+        raise ValueError("boolean is not a valid number")
+    number = value if isinstance(value, Decimal) else Decimal(str(value))
+    if not number.is_finite():
+        raise ValueError(f"number must be finite, got {value}")
+    return number
 
 
 def _fmt(value: float) -> str:
@@ -192,7 +200,9 @@ def verify_valuation(
     """Derive valuation ratios from raw per-share inputs (exact decimal).
 
     Each optional input, when supplied and non-zero, contributes its metric(s).
-    ROE additionally requires both ``eps`` and ``bvps``.
+    ROE additionally requires both ``eps`` and ``bvps``. Earnings yield and
+    FCF yield also need a non-zero price; a zero price omits them, the same
+    way dividend yield already does, instead of raising.
 
     Args:
         price: Current share price.
@@ -212,7 +222,8 @@ def verify_valuation(
         e = _exact(eps)
         if e != 0:
             metrics["PE"] = float(_CTX.divide(p, e))
-            metrics["earnings_yield_pct"] = float(_CTX.divide(e, p) * 100)
+            if p != 0:
+                metrics["earnings_yield_pct"] = float(_CTX.divide(e, p) * 100)
     if bvps is not None:
         b = _exact(bvps)
         if b != 0:
@@ -223,7 +234,8 @@ def verify_valuation(
         f = _exact(fcf_per_share)
         if f != 0:
             metrics["P_FCF"] = float(_CTX.divide(p, f))
-            metrics["FCF_yield_pct"] = float(_CTX.divide(f, p) * 100)
+            if p != 0:
+                metrics["FCF_yield_pct"] = float(_CTX.divide(f, p) * 100)
     if dividend is not None:
         d = _exact(dividend)
         if p != 0:
@@ -603,6 +615,16 @@ class FinancialRigorTool(BaseTool):
                 {"status": "error", "command": command, "error": str(exc)},
                 ensure_ascii=False,
             )
-        return json.dumps(
-            {"status": "ok", "command": command, **result}, ensure_ascii=False,
-        )
+        try:
+            # allow_nan=False: a finite input can still overflow float() to inf,
+            # and NaN / Infinity are not valid JSON.
+            return json.dumps(
+                {"status": "ok", "command": command, **result},
+                ensure_ascii=False, allow_nan=False,
+            )
+        except ValueError:
+            return json.dumps(
+                {"status": "error", "command": command,
+                 "error": "result is not representable as a finite number"},
+                ensure_ascii=False,
+            )

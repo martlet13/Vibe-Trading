@@ -24,12 +24,14 @@ vi.mock("@/lib/apiAuth", () => ({
 }));
 
 vi.mock("@/components/settings/ChannelSettings", () => ({ ChannelSettings: () => null }));
-vi.mock("@/components/settings/QVerisSettings", () => ({ QVerisSettings: () => null }));
 vi.mock("@/components/settings/SourcePrioritySettings", () => ({
   SourcePrioritySettings: () => null,
 }));
 
 const providers = [
+  { name: "openai-codex", label: "OpenAI Codex", api_key_env: null, base_url_env: null,
+    default_model: "openai-codex/gpt-6-sol", default_base_url: "https://chatgpt.com/backend-api/codex/responses",
+    api_key_required: false, auth_type: "oauth", reasoning_efforts: ["low", "medium", "high", "ultra"] },
   {
     name: "claude-cli",
     label: "Claude Code CLI (local login)",
@@ -184,4 +186,64 @@ describe("Settings with the claude-cli provider", () => {
     await waitFor(() => expect(effortOptions()).toEqual(["", "none", "low", "medium", "high", "max"]));
     expect(apiMock.listLLMModels).not.toHaveBeenCalled();
   });
+});
+
+
+describe("Settings with Codex OAuth discovery", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMock.getDataSourceSettings.mockResolvedValue({});
+    apiMock.getLLMSettings.mockResolvedValue(llmSettings({
+      provider: "openai-codex", model_name: "openai-codex/saved-model",
+    }));
+  });
+
+  it("automatically discovers account models, labels and model-specific efforts", async () => {
+    apiMock.listLLMModels.mockResolvedValue({
+      provider: "openai-codex", models: ["openai-codex/available"], source: "provider",
+      model_labels: {"openai-codex/available": "Available model"},
+      effort_levels: {"openai-codex/available": ["medium", "ultra"]},
+      default_effort_levels: {"openai-codex/available": "medium"},
+    });
+    render(<Settings />);
+    await waitFor(() => expect(apiMock.listLLMModels).toHaveBeenCalledWith(
+      expect.objectContaining({provider: "openai-codex", refresh: false}),
+    ));
+    expect(await screen.findByText("Loaded 1 available models.")).toBeInTheDocument();
+    const input = screen.getByRole("combobox", {name: "Model"});
+    expect(input).toHaveValue("openai-codex/saved-model");
+    fireEvent.click(input);
+    fireEvent.click(screen.getByRole("option", {name: /Available model/}));
+    expect(input).toHaveValue("openai-codex/available");
+    expect(effortOptions()).toEqual(["", "medium", "ultra"]);
+    expect(screen.getByText(/Provider default: Medium/)).toBeInTheDocument();
+  });
+
+  it("retains the saved model and manual entry after unavailable discovery", async () => {
+    apiMock.listLLMModels.mockResolvedValue({
+      provider: "openai-codex", models: ["openai-codex/gpt-6-sol"],
+      source: "default", warning_code: "model_list_unavailable",
+    });
+    render(<Settings />);
+    await waitFor(() => expect(apiMock.listLLMModels).toHaveBeenCalled());
+    const input = screen.getByRole("combobox", {name: "Model"});
+    expect(input).toHaveValue("openai-codex/saved-model");
+    fireEvent.change(input, {target: {value: "openai-codex/manual-model"}});
+    expect(input).toHaveValue("openai-codex/manual-model");
+  });
+});
+
+it("saves only the explicitly selected Gildata feature for an existing token", async () => {
+  const saved = { gildata_token_configured: true, gildata_features: [] };
+  apiMock.getLLMSettings.mockResolvedValue(llmSettings());
+  apiMock.getDataSourceSettings.mockResolvedValue(saved);
+  apiMock.updateDataSourceSettings.mockResolvedValue({ ...saved, gildata_features: ["fin_query"] });
+  render(<Settings />);
+  const query = await screen.findByRole("checkbox", { name: "Combined financial queries" });
+  expect(query).not.toBeChecked();
+  fireEvent.click(query);
+  fireEvent.click(screen.getByRole("button", { name: /save data source settings/i }));
+  await waitFor(() => expect(apiMock.updateDataSourceSettings).toHaveBeenCalledWith(
+    expect.objectContaining({ gildata_features: ["fin_query"] }),
+  ));
 });

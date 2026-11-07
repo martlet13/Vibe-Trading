@@ -13,10 +13,8 @@ picked for value the project does not already cover:
   search over the Juyuan report library (deeper metadata than the existing
   eastmoney-backed ``get_research_reports``; both coexist).
 
-Deliberately NOT wrapped (overlap with existing tools): news
-(``get_stock_news``/``web_search``), screening (``screen_market`` /
-``iwencai_search``), fund/manager selection, the generic ``FinQuery`` and the
-``FinDataFallbackQuery`` catch-all.
+Separate modules wrap FinQuery and SmartStockSelection. Existing news and
+screening sources remain available alongside them.
 
 The agent authors the natural-language ``query``; the server routes it. The
 routed ``api_names`` are echoed in every envelope so a mis-routed question is
@@ -32,6 +30,7 @@ from typing import Any
 
 from src.agent.tools import BaseTool
 from src.config.accessor import get_env_config
+from src.config.gildata_features import GildataFeature, feature_available
 from src.config.limits import TOOL_RESULT_LIMIT
 from src.tools._result_paging import fit_records
 from src.tools.gildata_srv import call_srv_tool
@@ -92,16 +91,17 @@ def _clean_limit(kwargs: Any) -> int:
 class _GildataSrvToolBase(BaseTool):
     """Shared plumbing for the srv-tool wrappers."""
 
+    feature: GildataFeature
     vendor_tool: str = ""
 
     @classmethod
     def check_available(cls) -> bool:
-        """Available only when ``GILDATA_TOKEN`` is configured."""
-        return bool(get_env_config().data.gildata_token)
+        """Require a token and explicit selection of this feature."""
+        return feature_available(cls.feature)
 
     def execute(self, **kwargs: Any) -> str:
-        if not get_env_config().data.gildata_token:
-            return _error("GILDATA_TOKEN is not configured")
+        if not self.check_available():
+            return _error(f"Enable {self.feature} in Gildata settings and configure GILDATA_TOKEN.")
         query = _clean_query(kwargs)
         if query is None:
             return _error("'query' must contain 1 to 4000 characters")
@@ -119,6 +119,7 @@ class GetCnMacroSeriesTool(_GildataSrvToolBase):
     """China macro / regional / industry economic time series (EDB)."""
 
     name = "get_cn_macro_series"
+    feature = "macro_series"
     vendor_tool = "MacroIndustryData"
     description = (
         "Fetch China macro / regional / industry economic indicator series "
@@ -154,6 +155,7 @@ class GetCnAnnouncementsTool(_GildataSrvToolBase):
     """A-share / HK / fund announcement retrieval with highlighted excerpts."""
 
     name = "get_cn_announcements"
+    feature = "announcements"
     vendor_tool = "AnnouncementData"
     description = (
         "Search Chinese-market company announcements (公告): A-share, HK and "
@@ -188,6 +190,7 @@ class SearchBrokerReportsTool(_GildataSrvToolBase):
     """Broker research search over the Juyuan report library."""
 
     name = "search_broker_reports"
+    feature = "broker_reports"
     vendor_tool = "FinancialResearchReport"
     description = (
         "Search sell-side broker research (券商研报) over the Juyuan library: "

@@ -166,11 +166,15 @@ def _ic_stats(ic: pd.Series) -> dict[str, Any]:
             "n_obs": 0,
         }
     mean = float(clean.mean())
-    std = float(clean.std(ddof=1)) if count > 1 else 0.0
+    # A sample standard deviation needs two observations; one IC is a point,
+    # not a spread. Reporting 0.0 claims the IC is perfectly stable on the
+    # strength of a single date, which is why ir and weight_turnover already
+    # answer None for the same sample size.
+    std = float(clean.std(ddof=1)) if count > 1 else None
     return {
         "ic_mean": mean,
         "ic_std": std,
-        "ir": (mean / std) if std > 0 else None,
+        "ir": (mean / std) if std is not None and std > 0 else None,
         "ic_positive_ratio": float((clean > 0).mean()),
         "n_obs": count,
     }
@@ -232,7 +236,11 @@ def _walk_forward_weights(
                 estimates[name] = value
         if not estimates:
             if insufficient == "equal":
-                frame.iloc[position] = 1.0
+                # Normalised like every other weight path, and like
+                # method="equal": an un-normalised 1.0 per factor leaves the
+                # row summing to the factor count, which reads as a full-book
+                # rebalance in weight_turnover once a real estimate replaces it.
+                frame.iloc[position] = 1.0 / len(names)
             continue
         total = float(sum(abs(value) for value in estimates.values()))
         if not np.isfinite(total) or total <= 0:
@@ -256,8 +264,12 @@ def _static_weights(weights: Mapping[str, float], names: list[str], index: pd.In
         values[name] = float(value)
     if not any(values.values()):
         raise ValueError("at least one weight must be nonzero")
-    total = float(sum(abs(value) for value in values.values()))
-    return _constant_weights(names, index, {name: values[name] / total for name in names})
+    scale = max(abs(value) for value in values.values())
+    scaled = {name: value / scale for name, value in values.items()}
+    total = float(sum(abs(value) for value in scaled.values()))
+    return _constant_weights(
+        names, index, {name: scaled[name] / total for name in names}
+    )
 
 
 def _table_weights(weights: pd.DataFrame, names: list[str], index: pd.Index) -> pd.DataFrame:
@@ -277,9 +289,16 @@ def _table_weights(weights: pd.DataFrame, names: list[str], index: pd.Index) -> 
     except (TypeError, ValueError) as exc:
         raise ValueError("weight table must contain numeric values") from exc
     table = np.where(np.isfinite(table), table, np.nan)
+    scale = np.max(
+        np.where(np.isfinite(table), np.abs(table), 0.0), axis=1, keepdims=True
+    )
+    scale = np.where(scale > 0, scale, 1.0)
+    table = table / scale
     total = np.nansum(np.abs(table), axis=1, keepdims=True)
     with np.errstate(invalid="ignore", divide="ignore"):
-        table = np.divide(table, total, out=np.full_like(table, np.nan), where=total > 0)
+        table = np.divide(
+            table, total, out=np.full_like(table, np.nan), where=total > 0
+        )
     return pd.DataFrame(table, index=index, columns=names).ffill()
 
 

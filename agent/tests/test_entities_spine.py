@@ -129,6 +129,21 @@ def test_sign_convention_rejects_negative_distribution():
         CashFlow(date=date(2024, 1, 1), amount=-500.0, kind="distribution", currency="USD")
 
 
+@pytest.mark.parametrize(
+    ("kind", "amount", "direction"),
+    [("transfer_in", 100.0, "negative"), ("transfer_out", -100.0, "positive")],
+)
+def test_portfolio_transfer_signs_follow_holder_perspective(kind, amount, direction):
+    with pytest.raises(ValueError, match=direction):
+        CashFlow(date=date(2024, 1, 1), amount=amount, kind=kind, currency="USD")
+
+
+@pytest.mark.parametrize(("kind", "amount"), [("transfer_in", -100.0), ("transfer_out", 100.0)])
+def test_portfolio_transfer_signs_accept_holder_perspective(kind, amount):
+    flow = CashFlow(date=date(2024, 1, 1), amount=amount, kind=kind, currency="USD")
+    assert flow.amount == amount
+
+
 def test_sign_convention_applies_after_kind_normalization():
     """'Capital Call' must be checked as capital_call, not treated as custom."""
     with pytest.raises(ValueError, match="negative"):
@@ -434,6 +449,29 @@ def test_load_cashflows_reads_european_grouping_without_mangling_it(tmp_path):
         'date,amount,kind,currency\n2024-03-31,"1.234,50",coupon,USD\n',
     )
     assert load_cashflows(path)[0].amount == pytest.approx(1234.50)
+
+
+def test_load_cashflows_reads_dot_grouping_with_no_fraction(tmp_path):
+    """'1.234.567' is 1234567, the same way '1,234,567' already is.
+
+    Two or more of the same separator cannot be a decimal point, so the number
+    is unambiguous whichever locale wrote it -- the multi-comma case is already
+    resolved that way. Without the matching dot rule the cell reaches float()
+    unchanged and the row fails as "not usable".
+    """
+    path = _write_csv(
+        tmp_path,
+        "flows.csv",
+        'date,amount,kind,currency\n2024-03-31,"1.234.567",coupon,USD\n',
+    )
+    assert load_cashflows(path)[0].amount == pytest.approx(1234567.0)
+
+    comma = _write_csv(
+        tmp_path,
+        "commas.csv",
+        'date,amount,kind,currency\n2024-03-31,"1,234,567",coupon,USD\n',
+    )
+    assert load_cashflows(comma)[0].amount == pytest.approx(1234567.0)
 
 
 def test_load_cashflows_refuses_an_ambiguous_single_comma(tmp_path):

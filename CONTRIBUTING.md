@@ -408,3 +408,25 @@ retains the existing one-retry behavior. When moving a helper, update tests
 to patch the module where it executes; re-exported names preserve imports,
 not monkeypatch propagation. Verify the existing loop, stream, cancellation,
 compaction and grounding suites after an extraction.
+
+## Connection-specific gateways and quote times
+
+For a local IBKR or Futu connection, the connection center's Host and Port fields
+are saved before Test runs. The saved address applies only to that connection's
+checks and portfolio reads; existing broker configuration remains the fallback.
+The CLI supports the same persisted address, for example:
+
+```bash
+vibe-trading connector setup ibkr-paper-local --connection-id my-gateway --host 127.0.0.1 --port 4002 --skip-check
+```
+
+Supply both `--host` and `--port`. Existing agent read tools select the saved
+endpoint with `connection_id`. This does not enable order placement or change
+the broker's paper/live account checks.
+
+Robinhood portfolio quotes must match the requested symbol. For active,
+previously traded instruments, the mapper selects the more recent timestamped
+regular-hours or extended-hours trade and reports its as-of time. It does not
+label an old print as live. Untraded or inactive instruments remain unpriced;
+an invalid quote or mismatched settled-close symbol is surfaced as a pricing
+error. Schema-based adapter tests do not replace authenticated broker validation.

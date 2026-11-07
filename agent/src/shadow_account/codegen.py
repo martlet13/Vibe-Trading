@@ -19,7 +19,12 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from src.shadow_account.models import PRICE_FEATURES, ShadowProfile, ShadowRule
+from src.shadow_account.models import (
+    PRICE_FEATURES,
+    ShadowProfile,
+    ShadowRule,
+    canonical_comparison,
+)
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _SIGNAL_ENGINE_TEMPLATE = "signal_engine.py.j2"
@@ -69,9 +74,80 @@ def _env() -> Environment:
     return env
 
 
+def _finite_number(value: Any) -> float | None:
+    """Return *value* as a finite float, or ``None`` when it is not one."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def _unsupported_bound(feature: str, bounds: Any) -> ValueError:
+    """Build the refusal for a condition the template cannot express exactly."""
+    return ValueError(
+        f"entry_condition[{feature!r}] = {bounds!r} cannot be expressed by the "
+        "signal-engine template, which supports inclusive bounds only "
+        "('>=' / '<=' or {\"min\", \"max\"})"
+    )
+
+
+def _inclusive_slot(op: Any) -> str | None:
+    """Map an inclusive comparison operator to a template bound slot."""
+    return {">=": "min", "<=": "max"}.get(canonical_comparison(op) or "")
+
+
+def _pair_or_scalar_bound(feature: str, bounds: Any) -> tuple[str, float]:
+    """Map one ``(op, value)`` pair or bare scalar to a single bound slot.
+
+    A bare scalar means ``>=``, which is how the scanner reads one.
+
+    Args:
+        feature: The ``PRICE_FEATURES`` name the condition belongs to.
+        bounds: The condition as the profile states it.
+
+    Returns:
+        ``("min" | "max", threshold)``.
+
+    Raises:
+        ValueError: If the pair is malformed or its operator has no exact
+            inclusive representation.
+    """
+    if isinstance(bounds, (list, tuple)):
+        if len(bounds) < 2:
+            raise _unsupported_bound(feature, bounds)
+        slot = _inclusive_slot(bounds[0])
+        threshold = _finite_number(bounds[1])
+    else:
+        slot, threshold = "min", _finite_number(bounds)
+    if slot is None or threshold is None:
+        raise _unsupported_bound(feature, bounds)
+    return slot, threshold
+
+
 def _rule_to_context(rule: ShadowRule) -> dict[str, Any]:
-    """Flatten a ShadowRule into the scalar fields the template consumes."""
-    market = str(rule.entry_condition.get("market", "other"))
+    """Flatten a ShadowRule into the scalar fields the template consumes.
+
+    A condition that names a price feature must either become a bound the
+    template can express or be refused: a bound the template silently ignores
+    would backtest the rule wider than the profile states it. ``None`` means
+    "no bound" and is not an error.
+
+    Args:
+        rule: The rule to flatten.
+
+    Returns:
+        Scalar context for the signal-engine template.
+
+    Raises:
+        ValueError: If ``market`` is not a string, or a price-feature
+            condition cannot be expressed as an inclusive bound.
+    """
+    market = rule.entry_condition.get("market", "other")
+    if not isinstance(market, str):
+        raise ValueError(
+            f"entry_condition['market'] = {market!r} must be a string; a "
+            "comparison cannot name a market bucket"
+        )
     hour = rule.entry_condition.get("entry_hour") or {}
     hold_lo, hold_hi = rule.holding_days_range
     hold_days = max(1, int(round((hold_lo + hold_hi) / 2)))
@@ -85,12 +161,19 @@ def _rule_to_context(rule: ShadowRule) -> dict[str, Any]:
     }
     for feature in PRICE_FEATURES:
         bounds = rule.entry_condition.get(feature)
+        if bounds is None:
+            continue
         if isinstance(bounds, dict):
-            lo = bounds.get("min")
-            hi = bounds.get("max")
-            if isinstance(lo, (int, float)) and isinstance(hi, (int, float)):
-                ctx[feature + "_min"] = float(lo)
-                ctx[feature + "_max"] = float(hi)
+            for slot in ("min", "max"):
+                if slot not in bounds or bounds[slot] is None:
+                    continue
+                threshold = _finite_number(bounds[slot])
+                if threshold is None:
+                    raise _unsupported_bound(feature, bounds)
+                ctx[f"{feature}_{slot}"] = threshold
+            continue
+        slot, threshold = _pair_or_scalar_bound(feature, bounds)
+        ctx[f"{feature}_{slot}"] = threshold
     return ctx
 
 
@@ -103,6 +186,10 @@ def render_signal_engine(profile: ShadowProfile) -> str:
     Returns:
         Python source string. The caller is expected to ``validate_generated``
         before writing to disk.
+
+    Raises:
+        ValueError: If a rule carries a condition the template cannot express
+            exactly as an inclusive bound (see ``_rule_to_context``).
     """
     template = _env().get_template(_SIGNAL_ENGINE_TEMPLATE)
     return template.render(
@@ -203,7 +290,10 @@ def write_run_dir(
     """Materialize a full run_dir with ``code/signal_engine.py`` + ``config.json``.
 
     Raises:
-        ValueError: Generated signal_engine fails static validation.
+        ValueError: Generated signal_engine fails static validation, or
+            ``render_signal_engine`` refuses a condition the template cannot
+            express (the refusal propagates from here; callers are
+            ``backtester.py`` and the ``shadow_account_tool`` backtest tool).
     """
     run_dir = Path(run_dir)
     (run_dir / "code").mkdir(parents=True, exist_ok=True)

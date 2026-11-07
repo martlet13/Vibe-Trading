@@ -130,10 +130,125 @@ def test_final_without_content_is_fed_back_and_retried(fake_cli) -> None:
 
     assert message.content == "order 42 cancelled"
     assert "no tool calls and no content" in calls()[1]["stdin"]
-    # input_tokens is the last prompt's size (what the context meter reads);
-    # output_tokens is what both attempts generated.
-    assert message.usage_metadata["input_tokens"] == 10
+    # Billing includes both attempts, while compaction sees the last prompt.
+    assert message.usage_metadata["input_tokens"] == 20
+    assert message.usage_metadata["context_input_tokens"] == 10
+    assert message.usage_metadata["calls"] == 2
     assert message.usage_metadata["output_tokens"] == 10
+
+
+def test_native_attempt_is_fed_back_with_the_original_prompt(fake_cli) -> None:
+    first = payload({"action": "final", "content": "No such tool available"})
+    first["num_turns"] = 3
+    set_replies, calls = fake_cli
+    set_replies(
+        {"payload": first},
+        {
+            "payload": payload(
+                {
+                    "action": "tool_calls",
+                    "tool_calls": [
+                        {
+                            "name": "get_market_data",
+                            "arguments": {"codes": ["HYPE-USDT"]},
+                        }
+                    ],
+                }
+            )
+        },
+    )
+
+    message = claude_cli.ClaudeCliLLM(tools=[tool("get_market_data")]).invoke(
+        [{"role": "user", "content": "run the backtest"}]
+    )
+
+    assert message.tool_calls[0]["name"] == "get_market_data"
+    stdin = calls()[1]["stdin"]
+    assert "run the backtest" in stdin
+    assert "Native tool calls" in stdin
+    assert "action=tool_calls" in stdin
+
+
+def test_permission_denials_are_fed_back_instead_of_accepting_final(fake_cli) -> None:
+    first = payload({"action": "final", "content": "tools are unavailable"})
+    first["permission_denials"] = [{"tool_name": "bash"}]
+    set_replies, calls = fake_cli
+    set_replies(
+        {"payload": first},
+        {"payload": payload({"action": "final", "content": "recovered"})},
+    )
+
+    message = claude_cli.ClaudeCliLLM(tools=[tool("get_market_data")]).invoke(
+        [{"role": "user", "content": "x"}]
+    )
+
+    assert message.content == "recovered"
+    assert "Native tool calls" in calls()[1]["stdin"]
+
+
+def test_repeated_native_attempts_exhaust_the_existing_retry_budget(fake_cli) -> None:
+    reply = payload({"action": "final", "content": "tools are broken"})
+    reply["num_turns"] = 3
+    set_replies, calls = fake_cli
+    set_replies({"payload": reply})
+
+    with pytest.raises(RuntimeError, match="native tool calls kept bypassing"):
+        claude_cli.ClaudeCliLLM(tools=[tool("get_market_data")]).invoke(
+            [{"role": "user", "content": "x"}]
+        )
+
+    assert len(calls()) == claude_cli._MAX_RETRIES + 1
+
+
+def test_valid_structured_calls_are_not_retried_after_native_metadata(fake_cli) -> None:
+    reply = payload(
+        {
+            "action": "tool_calls",
+            "tool_calls": [{"name": "get_market_data", "arguments": {}}],
+        }
+    )
+    reply["permission_denials"] = [{"tool_name": "bash"}]
+    set_replies, calls = fake_cli
+    set_replies({"payload": reply})
+
+    message = claude_cli.ClaudeCliLLM(tools=[tool("get_market_data")]).invoke(
+        [{"role": "user", "content": "x"}]
+    )
+
+    assert message.tool_calls[0]["name"] == "get_market_data"
+    assert len(calls()) == 1
+
+
+def test_single_turn_final_answer_does_not_trigger_native_retry(fake_cli) -> None:
+    reply = payload({"action": "final", "content": "done"})
+    reply["num_turns"] = 1
+    reply["permission_denials"] = []
+    set_replies, calls = fake_cli
+    set_replies({"payload": reply})
+
+    message = claude_cli.ClaudeCliLLM(tools=[tool("get_market_data")]).invoke(
+        [{"role": "user", "content": "x"}]
+    )
+
+    assert message.content == "done"
+    assert len(calls()) == 1
+
+
+def test_structured_output_turn_final_answer_does_not_trigger_native_retry(
+    fake_cli,
+) -> None:
+    reply = payload({"action": "final", "content": "done"})
+    reply["num_turns"] = 2
+    reply["permission_denials"] = []
+    set_replies, calls = fake_cli
+    set_replies({"payload": reply})
+
+    message = claude_cli.ClaudeCliLLM(tools=[tool("get_market_data")]).invoke(
+        [{"role": "user", "content": "x"}]
+    )
+
+    assert message.content == "done"
+    assert len(calls()) == 1
 
 
 def test_final_never_echoes_the_structured_output_as_content(fake_cli) -> None:
@@ -410,3 +525,76 @@ def test_preflight_uses_cli_login(monkeypatch) -> None:
 
     assert result.status == "not_configured"
     assert "claude auth login" in result.impact
+
+
+def test_usage_preserves_cache_split_as_input_token_details() -> None:
+    result = claude_cli._usage({
+        "usage": {
+            "input_tokens": 10,
+            "cache_creation_input_tokens": 5,
+            "cache_read_input_tokens": 20,
+            "output_tokens": 3,
+        },
+    })
+    assert result == {
+        "input_tokens": 35,
+        "output_tokens": 3,
+        "total_tokens": 38,
+        "input_token_details": {"cache_read": 20, "cache_creation": 5},
+    }
+
+
+def test_usage_omits_details_when_no_cache() -> None:
+    result = claude_cli._usage({
+        "usage": {"input_tokens": 10, "output_tokens": 3},
+    })
+    assert result == {
+        "input_tokens": 10,
+        "output_tokens": 3,
+        "total_tokens": 13,
+    }
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+def test_retry_details_reach_persisted_usage(fake_cli, monkeypatch, tmp_path, streaming):
+    from src.agent.llm_usage import _new_llm_usage_summary, _record_llm_usage
+    set_replies, _ = fake_cli
+    replies = []
+    for content, tokens in [("", 10), ("done", 20)]:
+        reply = payload({"action": "final", "content": content})
+        reply["usage"] = {"input_tokens": tokens, "output_tokens": 3,
+                          "cache_creation_input_tokens": 5, "cache_read_input_tokens": 7}
+        replies.append({"payload": reply})
+    set_replies(*replies)
+    use_provider(monkeypatch)
+    client = ChatLLM()
+    response = (client.stream_chat if streaming else client.chat)([{"role": "user", "content": "hi"}])
+    usage = response.usage_metadata
+    assert usage["input_tokens"] == 54
+    assert usage["context_input_tokens"] == 32
+    summary = _new_llm_usage_summary(client)
+    _record_llm_usage(tmp_path, summary, usage, 1)
+    saved = json.loads((tmp_path / "llm_usage.json").read_text())
+    assert saved["totals"] == {"input_tokens": 54, "output_tokens": 6,
+        "total_tokens": 60, "calls": 2, "cache_read_tokens": 14, "cache_creation_tokens": 10}
+
+
+def test_cache_creation_total_is_not_added_to_its_breakdown():
+    usage = claude_cli._usage({"usage": {"input_tokens": 10,
+        "cache_creation_input_tokens": 5, "ephemeral_5m_input_tokens": 5,
+        "cache_creation": {"ephemeral_5m_input_tokens": 5}}})
+    assert usage["input_tokens"] == 15
+    assert usage["input_token_details"]["cache_creation"] == 5
+
+
+def test_exhausted_feedback_retries_keep_their_paid_usage(fake_cli, monkeypatch):
+    set_replies, _ = fake_cli
+    set_replies(*[{"payload": payload({"action": "final", "content": ""})}
+                  for _ in range(claude_cli._MAX_RETRIES + 1)])
+    use_provider(monkeypatch)
+    with pytest.raises(Exception, match="without content") as failure:
+        ChatLLM().stream_chat([{"role": "user", "content": "hi"}])
+    usage = failure.value.usage_metadata
+    assert usage["calls"] == 4
+    assert usage["input_tokens"] == 40
+    assert usage["output_tokens"] == 20

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, TrendingUp, Globe, Sparkles, Users, UserCircle2, NotebookPen, Landmark, Gem, Search, WalletCards } from "lucide-react";
+import { ArrowUpRight, ChevronDown, TrendingUp, Globe, Sparkles, Users, UserCircle2, NotebookPen, Landmark, Gem, Search, WalletCards } from "lucide-react";
 import { BrandMark } from "@/components/common/BrandMark";
 
 interface Example {
@@ -176,6 +176,23 @@ const CATEGORIES: Category[] = [
   },
 ];
 
+const FEATURED_EXAMPLE_KEYS = [
+  "welcome.examples.earningsReport",
+  "welcome.examples.crossMarketPortfolio",
+  "welcome.examples.thesisTracker",
+] as const;
+
+// Resolved from the library so a featured card always carries its own
+// category label and prompt; a key that drifts out of CATEGORIES fails loudly.
+const FEATURED_EXAMPLES = FEATURED_EXAMPLE_KEYS.map((titleKey) => {
+  const category = CATEGORIES.find((cat) => cat.examples.some((ex) => ex.titleKey === titleKey));
+  const example = category?.examples.find((ex) => ex.titleKey === titleKey);
+  if (!category || !example) {
+    throw new Error(`Featured example ${titleKey} is not in the example library`);
+  }
+  return { category, example };
+});
+
 const GREETING_KEYS = {
   morning: [
     "welcome.greetings.morning1",
@@ -244,23 +261,22 @@ export function WelcomeScreen({ onExample }: Props) {
   const examplesTriggerRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="flex w-full flex-col items-center px-4 pb-14 text-center">
-      <div className="w-full max-w-3xl">
-        <div className="mx-auto max-w-2xl">
-          <div className="flex items-center justify-center gap-3">
-            <BrandMark className="h-9 w-9 shrink-0" />
-            <h1 className="font-serif text-[34px] font-normal leading-tight sm:text-[40px]">
-              {t(greetingKey as any)}
-            </h1>
-          </div>
-          <p className="mt-3 text-sm text-muted-foreground">
-            {t("welcome.taskSubtitle" as any)}
-            <span className="mt-2 block text-xs">{t("welcome.tasks.hint")}</span>
-          </p>
-        </div>
+    <div className="w-full px-4 pb-14 pt-6 text-start">
+      <BrandMark className="mb-8 h-6 w-6" />
 
+      <h1 className="font-serif text-[38px] font-normal leading-[1.08] tracking-[-0.025em] sm:text-[52px]">
+        {t(greetingKey as any)}
+      </h1>
+      <p className="mt-4 text-base leading-7 text-muted-foreground sm:text-lg">
+        {t("welcome.taskSubtitle" as any)}
+      </p>
+
+      <div className="mt-10 border-y border-border/70 py-5">
+        <span className="mb-3 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          {t("welcome.quickActions" as any)}
+        </span>
         <div
-          className="mt-8 flex flex-wrap justify-center gap-2"
+          className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2"
           role="group"
           aria-label={t("welcome.quickActions" as any)}
         >
@@ -277,24 +293,58 @@ export function WelcomeScreen({ onExample }: Props) {
                 }}
                 className={
                   isActive
-                    ? "inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/[0.08] px-4 py-2 text-sm text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    : "inline-flex items-center gap-2 rounded-full border border-border/60 bg-card px-4 py-2 text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    ? "group flex min-h-24 items-center justify-between rounded-xl border border-primary/35 bg-primary/[0.08] px-4 py-3 text-start text-primary shadow-sm transition-all hover:border-primary/50 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    : "group flex min-h-24 items-center justify-between rounded-xl border border-border/70 bg-card/70 px-4 py-3 text-start transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 }
               >
-                {action.icon}
-                <span>{t(action.titleKey as any)}</span>
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/70 text-muted-foreground transition-colors group-hover:text-primary">
+                    {action.icon}
+                  </span>
+                  {t(action.titleKey as any)}
+                </span>
+                <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5" aria-hidden="true" />
               </button>
             );
           })}
         </div>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">
+          {t("welcome.tasks.hint")}
+        </p>
+      </div>
 
+      <section aria-labelledby="welcome-featured-heading" className="mt-8">
+        <h2
+          id="welcome-featured-heading"
+          className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+        >
+          {t("welcome.featured" as any)}
+        </h2>
+        <ul className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-2">
+          {FEATURED_EXAMPLES.map(({ category, example }) => (
+            <li key={example.titleKey} className="flex">
+              <button
+                type="button"
+                onClick={() => onExample(t(example.promptKey as any))}
+                className="group flex w-full flex-col rounded-xl border border-border/70 bg-card/50 p-4 text-start transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70">{t(category.labelKey as any)}</span>
+                <span className="mt-1.5 text-sm font-medium leading-6 transition-colors group-hover:text-primary">{t(example.titleKey as any)}</span>
+                <span className="mt-1 text-xs leading-5 text-muted-foreground">{t(example.descKey as any)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <div className="mt-8">
         <button
           ref={examplesTriggerRef}
           type="button"
           aria-expanded={isExamplesOpen}
           aria-controls="welcome-example-library"
           onClick={() => setIsExamplesOpen((open) => !open)}
-          className="mt-10 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <span>{t("welcome.browseAllExamples" as any)}</span>
           <ChevronDown
@@ -313,19 +363,16 @@ export function WelcomeScreen({ onExample }: Props) {
             setIsExamplesOpen(false);
             examplesTriggerRef.current?.focus();
           }}
-          className={`grid text-left transition-[grid-template-rows,opacity] duration-300 ease-out ${
+          className={`grid text-start transition-[grid-template-rows,opacity] duration-300 ease-out ${
             isExamplesOpen
-              ? "grid-rows-[1fr] opacity-100"
+              ? "mt-5 grid-rows-[1fr] opacity-100"
               : "grid-rows-[0fr] opacity-0"
           }`}
         >
           <div className="min-h-0 overflow-hidden">
-            {/* One category at a time: a chip tab bar + that category's cards.
-                Rendering all 8 categories at once (grid or masonry) reads as
-                an unstructured wall — categories have uneven card counts. */}
-            <div className="pt-6">
+            <div className="border-t border-border/70 pt-5">
               <div
-                className="flex flex-wrap justify-center gap-1.5"
+                className="flex flex-wrap gap-1.5"
                 role="tablist"
                 aria-label={t("welcome.browseAllExamples" as any)}
               >
@@ -348,21 +395,17 @@ export function WelcomeScreen({ onExample }: Props) {
                   </button>
                 ))}
               </div>
-              <div role="tabpanel" className="mt-4 grid gap-2 text-left sm:grid-cols-2">
+              <div role="tabpanel" className="mt-4 grid gap-2 text-start sm:grid-cols-2">
                 {CATEGORIES[activeCategory].examples.map((ex) => (
                   <button
                     key={ex.titleKey}
                     type="button"
                     tabIndex={isExamplesOpen ? 0 : -1}
                     onClick={() => onExample(t(ex.promptKey as any))}
-                    className="block w-full rounded-xl border border-border/60 px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className="block w-full rounded-xl border border-border/60 px-3 py-2.5 text-start transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
-                    <span className="text-sm font-medium leading-snug text-foreground">
-                      {t(ex.titleKey as any)}
-                    </span>
-                    <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
-                      {t(ex.descKey as any)}
-                    </span>
+                    <span className="text-sm font-medium leading-snug text-foreground">{t(ex.titleKey as any)}</span>
+                    <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{t(ex.descKey as any)}</span>
                   </button>
                 ))}
               </div>

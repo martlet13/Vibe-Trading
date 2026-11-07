@@ -3,22 +3,49 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import signal
 import subprocess
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from src.agent.tools import BaseTool
 from src.tools._shell_safety import broad_python_kill_error
 
 WORKDIR = Path(__file__).resolve().parents[2]
+#: Task ids with a live process anywhere in this interpreter. Restart recovery
+#: must not mistake a sibling manager's running task for a previous process's.
+_LIVE_TASK_IDS: set[str] = set()
+_LIVE_TASK_IDS_LOCK = threading.Lock()
 _COMMAND_TIMEOUT_SECONDS = 300.0
 _TERMINATION_GRACE_SECONDS = 2.0
 _MAX_OUTPUT_CHARS = 50_000
+
+
+@dataclass(frozen=True)
+class BackgroundScope:
+    """Which conversation or worker owns a background task.
+
+    The host that builds the tool registry supplies this. It never appears in a
+    model-visible tool schema: a model must not be able to claim another
+    session's task, or read its output, by naming an owner.
+
+    Ownership is by ``owner_id`` alone. ``attempt_id`` records which attempt
+    started the task so later bookkeeping can attribute it; a later attempt of
+    the same owner still sees tasks started by the earlier one.
+    """
+
+    owner_id: str
+    attempt_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if not str(self.owner_id).strip():
+            raise ValueError("a background scope must have a non-empty owner_id")
 
 
 def _start_process(command: str) -> subprocess.Popen[str]:
@@ -68,11 +95,10 @@ def _taskkill_windows_process_tree(process: subprocess.Popen[str]) -> None:
 
 def _force_stop_process_tree(process: subprocess.Popen[str]) -> None:
     """Force-stop one tracked process tree without draining its pipes."""
-    if process.poll() is not None:
-        return
     if os.name == "nt":
         _taskkill_windows_process_tree(process)
     else:
+        # Descendants can keep the group's pipes open after its shell exits.
         _signal_posix_process_group(process, signal.SIGKILL)
 
 
@@ -106,12 +132,125 @@ def _combined_output(stdout: str | None, stderr: str | None) -> str:
 
 
 class BackgroundManager:
-    """Background thread execution + notification queue."""
+    """Background thread execution + notification queue, addressed by owner.
 
-    def __init__(self) -> None:
+    One instance is a *handle*: it carries the scope its methods read and write
+    under. :meth:`for_scope` hands out another handle over the same task table,
+    so a session and its later attempts share their tasks while a different
+    session sees none of them.
+    """
+
+    def __init__(
+        self,
+        scope: Optional[BackgroundScope] = None,
+        *,
+        on_completion: Optional[Callable[[str, dict], None]] = None,
+        store: Optional[Any] = None,
+    ) -> None:
         self.tasks: Dict[str, dict] = {}
-        self._notifications: List[dict] = []
+        self._store = store
+        self._persist_lock = threading.Lock()
+        # (owner_id, payload). Kept as pairs so the payload shape consumers and
+        # existing tests see stays exactly what it was; routing is internal.
+        self._notifications: List[tuple[str, dict]] = []
         self._lock = threading.Lock()
+        self._condition = threading.Condition(self._lock)
+        self._accepting = [True]
+        self._on_completion = on_completion
+        self._scope = scope or BackgroundScope(owner_id=f"isolated:{uuid.uuid4().hex}")
+
+    @property
+    def scope(self) -> BackgroundScope:
+        """The owner this handle reads and writes under."""
+        return self._scope
+
+    def for_scope(
+        self,
+        scope: BackgroundScope,
+        *,
+        on_completion: Optional[Callable[[str, dict], None]] = None,
+    ) -> "BackgroundManager":
+        """Return a handle over the same task table bound to another owner."""
+        other = BackgroundManager(scope=scope)
+        other.tasks = self.tasks
+        other._notifications = self._notifications
+        other._lock = self._lock
+        other._condition = self._condition
+        other._accepting = self._accepting
+        other._store = self._store
+        other._persist_lock = self._persist_lock
+        other._on_completion = (
+            self._on_completion if on_completion is None else on_completion
+        )
+        return other
+
+    def _owns(self, task: dict) -> bool:
+        return task.get("owner_id") == self._scope.owner_id
+
+    def _persist(self, task_id: str) -> None:
+        """Best effort: a full or unwritable runtime root must not break the run."""
+        if self._store is None:
+            return
+        with self._persist_lock:
+            with self._lock:
+                task = dict(self.tasks.get(task_id) or {})
+            if not task:
+                return
+            try:
+                from src.tools.background_store import record_from_task
+                self._store.save(record_from_task(task_id, task))
+            except Exception:
+                logging.getLogger(__name__).exception("Could not persist background task %s", task_id)
+
+    def recover_on_start(self) -> dict:
+        """Reconcile records left by a previous process, once and without reruns.
+
+        A task id this interpreter is already running is left alone: a second
+        service constructed in the same process must not declare the first
+        one's live work interrupted.
+        """
+        if self._store is None:
+            return {"recovered": 0, "unchanged": 0, "unreadable": []}
+        from src.tools.background_store import TaskRecord, reconcile_after_restart
+
+        records, unreadable = self._store.load_all()
+        with _LIVE_TASK_IDS_LOCK:
+            live = set(_LIVE_TASK_IDS)
+        stale = [record for record in records if record.task_id not in live]
+        recovered, unchanged = reconcile_after_restart(stale)
+        for record in recovered:
+            try:
+                self._store.save(record)
+            except Exception:
+                logging.getLogger(__name__).exception("Could not persist recovered task %s", record.task_id)
+        with self._lock:
+            restored: list[TaskRecord] = []
+            for record in recovered + unchanged:
+                if record.task_id in self.tasks:
+                    continue
+                self.tasks[record.task_id] = {
+                    "status": record.status, "command": record.command_preview,
+                    "result": record.result_preview, "exit_code": record.exit_code,
+                    "owner_id": record.owner_id, "attempt_id": record.attempt_id,
+                    "process": None, "started_at": None,
+                    "started_wall_time": record.started_at, "ended_at": record.ended_at,
+                    "duration_seconds": record.duration_seconds,
+                    "recovery_reason": record.recovery_reason,
+                    "notification_pending": record.notification_pending,
+                }
+                if record.notification_pending is True:
+                    restored.append(record)
+            restored.sort(key=lambda record: (
+                record.ended_at if record.ended_at is not None else record.updated_at,
+                record.task_id,
+            ))
+            self._notifications[:0] = [(record.owner_id, {
+                "task_id": record.task_id, "status": record.status,
+                "command": record.command_preview[:80],
+                "result": (record.result_preview or "(no output)")[:500],
+                "exit_code": record.exit_code,
+            }) for record in restored]
+        return {"recovered": len(recovered), "unchanged": len(unchanged), "unreadable": unreadable}
 
     def run(self, command: str) -> str:
         """Start a background task and return its task_id.
@@ -132,6 +271,8 @@ class BackgroundManager:
         task_id = uuid.uuid4().hex[:8]
         started_at = time.monotonic()
         with self._lock:
+            if not self._accepting[0]:
+                return json.dumps({"status": "error", "error": "Background host is shutting down"})
             self.tasks[task_id] = {
                 "status": "running",
                 "result": None,
@@ -140,7 +281,14 @@ class BackgroundManager:
                 "process": None,
                 "cancel_requested": False,
                 "started_at": started_at,
+                "started_wall_time": time.time(),
+                "owner_id": self._scope.owner_id,
+                "attempt_id": self._scope.attempt_id,
+                "notification_pending": True,
             }
+            with _LIVE_TASK_IDS_LOCK:
+                _LIVE_TASK_IDS.add(task_id)
+        self._persist(task_id)
         threading.Thread(target=self._execute, args=(task_id, command), daemon=True).start()
         return json.dumps({"status": "ok", "task_id": task_id, "message": f"Started: {command[:80]}"})
 
@@ -150,35 +298,42 @@ class BackgroundManager:
         output = ""
         status = "error"
         try:
-            process = _start_process(command)
             with self._lock:
                 task = self.tasks.get(task_id)
-                if task is None:
+                skip_spawn = task is None or bool(task.get("cancel_requested"))
+            if not skip_spawn:
+                process = _start_process(command)
+                with self._lock:
+                    task = self.tasks[task_id]
+                    task["process"] = process
+                    task["pid"] = process.pid
+                    cancel_requested = bool(task.get("cancel_requested"))
+                self._persist(task_id)
+                if cancel_requested:
                     _force_stop_process_tree(process)
-                    return
-                task["process"] = process
-                cancel_requested = bool(task.get("cancel_requested"))
-            if cancel_requested:
-                _force_stop_process_tree(process)
 
-            try:
-                stdout, stderr = process.communicate(timeout=_COMMAND_TIMEOUT_SECONDS)
-                output = _combined_output(stdout, stderr)
-                exit_code = process.returncode
-                status = "completed" if exit_code == 0 else "error"
-            except subprocess.TimeoutExpired:
-                stdout, stderr = _terminate_process_tree(process)
-                partial_output = _combined_output(stdout, stderr)
-                timeout_message = f"Timeout ({_COMMAND_TIMEOUT_SECONDS:g}s)"
-                output = (
-                    f"{partial_output}\n{timeout_message}"
-                    if partial_output
-                    else timeout_message
-                )
-                output = output[:_MAX_OUTPUT_CHARS]
-                status = "timeout"
+                try:
+                    stdout, stderr = process.communicate(timeout=_COMMAND_TIMEOUT_SECONDS)
+                    output = _combined_output(stdout, stderr)
+                    exit_code = process.returncode
+                    status = "completed" if exit_code == 0 else "error"
+                except subprocess.TimeoutExpired:
+                    stdout, stderr = _terminate_process_tree(process)
+                    partial_output = _combined_output(stdout, stderr)
+                    timeout_message = f"Timeout ({_COMMAND_TIMEOUT_SECONDS:g}s)"
+                    output = (
+                        f"{partial_output}\n{timeout_message}"
+                        if partial_output
+                        else timeout_message
+                    )[:_MAX_OUTPUT_CHARS]
+                    exit_code = process.returncode
+                    status = "timeout"
         except Exception as e:
             output, status = str(e), "error"
+            if process is not None:
+                # Do not publish a terminal cancellation before its root is reaped.
+                _terminate_process_tree(process)
+                exit_code = process.returncode
 
         with self._lock:
             task = self.tasks.get(task_id)
@@ -203,11 +358,56 @@ class BackgroundManager:
                     max(0.0, time.monotonic() - started_at),
                     3,
                 )
-            self._notifications.append({
+            payload = {
                 "task_id": task_id, "status": status,
                 "command": command[:80], "result": (output or "")[:500],
                 "exit_code": exit_code,
-            })
+            }
+            self._notifications.append((task["owner_id"], payload))
+            task["ended_at"] = time.time()
+            task["pid"] = getattr(process, "pid", None)
+            self._condition.notify_all()
+        self._persist(task_id)
+        with _LIVE_TASK_IDS_LOCK:
+            _LIVE_TASK_IDS.discard(task_id)
+        if self._on_completion is not None:
+            try:
+                self._on_completion(task["owner_id"], {**payload, "attempt_id": task.get("attempt_id")})
+            except Exception:
+                logging.getLogger(__name__).exception("Could not publish background task completion")
+
+    def cancel_all(self, *, timeout: float = 0.0) -> dict:
+        """Request owner-scoped cancellation and optionally wait for actual reaping."""
+        with self._lock:
+            task_ids = [tid for tid, task in self.tasks.items()
+                        if self._owns(task) and task["status"] in {"running", "cancelling"}]
+        for task_id in task_ids:
+            self.cancel(task_id)
+        with self._condition:
+            def pending():
+                return [tid for tid in task_ids
+                        if self.tasks[tid]["status"] in {"running", "cancelling"}]
+
+            self._condition.wait_for(lambda: not pending(), timeout=max(0.0, timeout))
+            return {"requested": len(task_ids), "pending": pending()}
+
+    def shutdown(self, *, timeout: float = 5.0) -> list[str]:
+        """Close this host's shared table, not other managers in the process."""
+        with self._lock:
+            self._accepting[0] = False
+            owners = {task["owner_id"] for task in self.tasks.values()
+                      if task["status"] in {"running", "cancelling"}}
+        deadline = time.monotonic() + max(0.0, timeout)
+        for owner in owners:
+            remaining = max(0.0, deadline - time.monotonic())
+            self.for_scope(BackgroundScope(owner)).cancel_all(timeout=remaining)
+        with self._condition:
+            def pending():
+                return [tid for tid, task in self.tasks.items()
+                        if task["status"] in {"running", "cancelling"}]
+
+            self._condition.wait_for(lambda: not pending(), timeout=max(0.0, deadline - time.monotonic()))
+            return pending()
 
     def cancel(self, task_id: str) -> str:
         """Cancel one task by its tracked process group.
@@ -220,7 +420,9 @@ class BackgroundManager:
         """
         with self._lock:
             task = self.tasks.get(task_id)
-            if task is None:
+            # A task owned by another session is reported exactly like a task id
+            # that never existed, so probing cannot confirm one exists.
+            if task is None or not self._owns(task):
                 return json.dumps({
                     "status": "error",
                     "error": f"Unknown task {task_id}",
@@ -242,16 +444,10 @@ class BackgroundManager:
                 })
 
             process = task.get("process")
-            if process is not None and process.poll() is not None:
-                return json.dumps({
-                    "status": "error",
-                    "error": f"Task {task_id} is already finishing",
-                    "task_status": task_status,
-                })
-
             task["cancel_requested"] = True
             task["status"] = "cancelling"
 
+        self._persist(task_id)
         if process is not None:
             _force_stop_process_tree(process)
         return json.dumps({
@@ -267,11 +463,12 @@ class BackgroundManager:
         with self._lock:
             if task_id:
                 t = self.tasks.get(task_id)
-                task = dict(t) if t is not None else None
+                task = dict(t) if t is not None and self._owns(t) else None
             else:
                 task_summaries = [
                     (tid, t["status"], t["command"])
                     for tid, t in self.tasks.items()
+                    if self._owns(t)
                 ]
 
         if task_id:
@@ -285,7 +482,12 @@ class BackgroundManager:
                 "command": t["command"][:60],
                 "result": result or "(running)",
                 "exit_code": t.get("exit_code"),
+                "attempt_id": t.get("attempt_id"),
             }
+            if t.get("recovery_reason"):
+                payload["recovery_reason"] = t["recovery_reason"]
+            if t.get("started_wall_time") is not None:
+                payload["started_at"] = t["started_wall_time"]
             started_at = t.get("started_at")
             if isinstance(started_at, (int, float)):
                 duration = t.get("duration_seconds")
@@ -311,18 +513,61 @@ class BackgroundManager:
         return "\n".join(lines) if lines else "No background tasks."
 
     def drain_notifications(self) -> List[dict]:
+        """Return this owner's queued notifications, oldest first.
+
+        Notifications belonging to other owners stay queued for them; draining
+        one session can never consume another's result. Durable delivery is
+        acknowledged after the in-memory claim. If that write or the process
+        fails, the next restart can replay a notice (at-least-once delivery).
+        """
+        acknowledged: list[str] = []
         with self._lock:
-            notifs = list(self._notifications)
-            self._notifications.clear()
-        return notifs
+            mine = [payload for owner, payload in self._notifications
+                    if owner == self._scope.owner_id]
+            self._notifications[:] = [(owner, payload) for owner, payload in self._notifications
+                                      if owner != self._scope.owner_id]
+            for payload in mine:
+                task_id = payload.get("task_id")
+                task = self.tasks.get(task_id)
+                if task is not None and task.get("notification_pending") is True:
+                    task["notification_pending"] = False
+                    acknowledged.append(task_id)
+        # Do not hold the task lock while taking the persistence lock: _persist
+        # takes them in the opposite order on completion and cancellation.
+        for task_id in acknowledged:
+            self._persist(task_id)
+        return mine
 
 
-_BG = BackgroundManager()
+_STORE_MANAGERS: dict[Path, BackgroundManager] = {}
+_STORE_MANAGERS_LOCK = threading.Lock()
 
 
-def get_background_manager() -> BackgroundManager:
-    """Return the global BackgroundManager singleton."""
-    return _BG
+def _manager_for_root(root: Path) -> BackgroundManager:
+    from src.tools.background_store import BackgroundTaskStore
+
+    key = Path(root).resolve()
+    with _STORE_MANAGERS_LOCK:
+        if key not in _STORE_MANAGERS:
+            manager = BackgroundManager(store=BackgroundTaskStore(key))
+            summary = manager.recover_on_start()
+            if summary["unreadable"]:
+                logging.getLogger(__name__).warning("Unreadable background records: %s", summary["unreadable"])
+            _STORE_MANAGERS[key] = manager
+        return _STORE_MANAGERS[key]
+
+
+def init_background_store(root: Path) -> Any:
+    """Initialize and reconcile one runtime root exactly once in this process."""
+    return _manager_for_root(root)._store
+
+
+def get_background_manager(root: Path | None = None) -> BackgroundManager:
+    """Return a private handle over this runtime root's durable task table."""
+    if root is None:
+        from src.config.paths import get_runtime_root
+        root = get_runtime_root()
+    return _manager_for_root(root).for_scope(BackgroundScope(owner_id=f"isolated:{uuid.uuid4().hex}"))
 
 
 class BackgroundRunTool(BaseTool):
@@ -338,8 +583,11 @@ class BackgroundRunTool(BaseTool):
     }, "required": ["command"]}
     is_readonly = False
 
+    def __init__(self, background: Optional[BackgroundManager] = None) -> None:
+        self.background = background if background is not None else get_background_manager()
+
     def execute(self, **kw: Any) -> str:
-        return _BG.run(kw["command"])
+        return self.background.run(kw["command"])
 
 
 class CheckBackgroundTool(BaseTool):
@@ -354,8 +602,11 @@ class CheckBackgroundTool(BaseTool):
     }, "required": []}
     repeatable = True
 
+    def __init__(self, background: Optional[BackgroundManager] = None) -> None:
+        self.background = background if background is not None else get_background_manager()
+
     def execute(self, **kw: Any) -> str:
-        return _BG.check(kw.get("task_id"))
+        return self.background.check(kw.get("task_id"))
 
 
 class CancelBackgroundTool(BaseTool):
@@ -378,5 +629,8 @@ class CancelBackgroundTool(BaseTool):
     }
     is_readonly = False
 
+    def __init__(self, background: Optional[BackgroundManager] = None) -> None:
+        self.background = background if background is not None else get_background_manager()
+
     def execute(self, **kw: Any) -> str:
-        return _BG.cancel(kw["task_id"])
+        return self.background.cancel(kw["task_id"])

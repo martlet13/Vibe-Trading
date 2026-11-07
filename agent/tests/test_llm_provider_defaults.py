@@ -35,7 +35,7 @@ EXPECTED_PROVIDER_DEFAULTS = {
     "zhipu": "glm-5.1",
     "glm": "glm-5.1",
     "moonshot": "kimi-k2.6",
-    "minimax": "MiniMax-M3",
+    "minimax": "MiniMax-M3.1-Flash",
     "mimo": "MiMo-72B-A27B",
     "spark": "4.0Ultra",
     "zai": "glm-5.1",

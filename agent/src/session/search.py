@@ -301,6 +301,21 @@ class SessionSearchIndex:
         )
         conn.commit()
 
+    @_serialized_operation
+    def remove_session(self, session_id: str) -> None:
+        """Remove a session and all of its messages from the index.
+
+        The ``messages_ad`` trigger propagates each message deletion into
+        ``messages_fts``, so the derived index clears with the base rows.
+
+        Args:
+            session_id: Session ID.
+        """
+        conn = self._get_conn()
+        with conn:
+            conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
     @staticmethod
     def _sanitize_fts_query(query: str) -> str:
         """Sanitize a user query for FTS5 MATCH syntax.
@@ -426,9 +441,10 @@ class SessionSearchIndex:
                 self.index_session(sid, title, ts=ts)
 
                 if messages_file.exists():
-                    for line in (
-                        messages_file.read_text(encoding="utf-8").strip().splitlines()
-                    ):
+                    # JSONL uses LF as its record separator.  ``splitlines``
+                    # incorrectly treats U+2028/U+2029 inside message text as
+                    # separators and drops the affected record during rebuild.
+                    for line in messages_file.read_text(encoding="utf-8").strip().split("\n"):
                         if not line.strip():
                             continue
                         try:

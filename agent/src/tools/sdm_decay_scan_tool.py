@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from src.agent.tools import BaseTool
+from src.tools._arguments import boolean_argument
 from src.strategy_store.decay import DecayEvaluator
 from src.strategy_store.metrics import (
     DECAY_BENCH_TYPES,
@@ -70,7 +71,7 @@ class SdmDecayScanTool(BaseTool):
             type_filter = None
             if kwargs.get("artifact_type"):
                 type_filter = ArtifactType(kwargs["artifact_type"])
-            dry_run = bool(kwargs.get("dry_run", False))
+            dry_run = boolean_argument(kwargs.get("dry_run", False), field="dry_run")
 
             # Collect ACTIVE and MONITORING artifacts
             active = store.list_artifacts(

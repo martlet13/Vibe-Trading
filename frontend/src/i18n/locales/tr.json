@@ -1,6 +1,21 @@
 {
+  "gildata": {
+    "partner": "Veri ortağı · Gildata",
+    "website": "MCP erişimi ve kayıt",
+    "features": "İsteğe bağlı Gildata özellikleri",
+    "optInHelp": "Dokuz özelliğin tümü varsayılan olarak kapalıdır. Kayıtlı bir token, güncellemeden sonra da hiçbir özelliği kendiliğinden açmaz. Piyasa fiyatları açık olsa bile Gildata yalnızca açıkça seçildiğinde kullanılır. Ücretsiz kaynaklar veri sağlamazsa Gildata’ya otomatik geçiş yapılmaz.",
+    "fund_nav": "Fonların net varlık değerleri",
+    "macro_series": "Çin makroekonomik göstergeleri",
+    "announcements": "Şirket ve fon duyuruları",
+    "broker_reports": "Aracı kurum araştırma raporları",
+    "market_quotes": "Piyasa fiyatları (yalnızca Gildata açıkça seçildiğinde)",
+    "fin_query": "Birleşik finansal sorgular",
+    "stock_selection": "Hisse tarama",
+    "symbol_search": "Menkul kıymet aramalarına Gildata sonuçlarını ekle",
+    "shannon": "Portföy analizi (Shannon)"
+  },
   "app": {
-    "version": "v0.1.18"
+    "version": "v0.1.19"
   },
   "charts": {
     "noPriceData": "Bu sembol için henüz fiyat verisi yok",
@@ -37,7 +52,41 @@
     "about": "Hakkında",
     "sessionsLoadFailed": "Konuşmalar yüklenemiyor.",
     "pixelOffice": "Piksel Ofis",
-    "paperTrading": "Sanal işlem"
+    "paperTrading": "Sanal işlem",
+    "researchArtifacts": "Araştırma çıktıları"
+  },
+  "researchArtifacts": {
+    "completeness": "Tamlık",
+    "optionalLinks": "İsteğe bağlı bağlantılı kimlikler",
+    "formTitleNew": "Araştırmayı kaydet",
+    "verification": "Doğrulama",
+    "subject": "Araştırma konusu",
+    "createdNotice": "{{id}} revizyonu oluşturuldu.",
+    "emptyHint": "Sonraki oturumlarda sonuçlarını ve kanıtlarını yeniden kullanmak için bir analiz kaydedin.",
+    "newResearch": "Yeni araştırma",
+    "emptyTitle": "Henüz araştırma çıktısı yok",
+    "save": "Araştırmayı kaydet",
+    "evidenceMissing": "Kanıt referansı eklenmemiş",
+    "saveError": "Araştırma çıktısı kaydedilemedi.",
+    "additionalEvidence": "Ek kanıt URI’leri (satır başına bir)",
+    "subtitle": "Önceki revizyonların üzerine yazmadan kanıta dayalı analizleri oturumlar arasında yeniden kullanın.",
+    "revise": "Bu revizyondan yola çıkarak düzenle",
+    "history": "Revizyon geçmişi",
+    "searchPlaceholder": "Konu, evren veya içerik ara",
+    "loadError": "Araştırma çıktıları yüklenemedi.",
+    "close": "Kapat",
+    "universe": "Evren (isteğe bağlı)",
+    "title": "Araştırma çıktıları",
+    "dataAsOf": "Veri tarihi",
+    "content": "Araştırma içeriği",
+    "saving": "Kaydediliyor…",
+    "idempotentNotice": "Aynı içerik ve kaynak bilgisi {{id}} içinde zaten var.",
+    "formTitleRevision": "Bağlantılı revizyon oluştur",
+    "evidence": "Kanıt referansları",
+    "hypothesis_id": "Hipotez kimliği",
+    "goal_id": "Hedef kimliği",
+    "session_id": "Oturum kimliği",
+    "run_id": "Çalıştırma kimliği"
   },
   "runtime": {
     "monitorBadge": "Çalışma durumu izleyicisi",
@@ -366,6 +415,7 @@
     "taskSubtitle": "Bir hisse, strateji veya portföyün hakkında sor; verileri getirip hesaplayacağım ve her adımı göstereceğim.",
     "quickActions": "Hızlı işlemler",
     "browseAllExamples": "Tüm örnekleri görüntüle",
+    "featured": "Öne çıkan örnekler",
     "greetings": {
       "morning1": "Günaydın.",
       "morning2": "Günaydın, hazır olduğunda başlayabiliriz.",
@@ -418,6 +468,9 @@
     "reasoningEffortMedium": "Orta",
     "reasoningEffortHigh": "Yüksek",
     "reasoningEffortMax": "Maksimum",
+    "reasoningEffortMinimal": "En düşük",
+    "reasoningEffortUltra": "Çok yüksek",
+    "reasoningEffortPersistent": "Sürekli",
     "reasoningEffortDesc": "Desteklenen modellerde akıl yürütme derinliğini kontrol eder. Yüksek düzeyler karmaşık analizi iyileştirebilir ancak daha uzun sürebilir; desteklemeyen sağlayıcılar bu ayarı yok sayabilir. “Yok (açıkça belirtilmiş)” seçeneği alanı göndererek akıl yürütmeyi kapatır; bazı OpenAI modelleri araç kullanımı için bunu gerektirir.",
     "useDefaultModel": "Varsayılan modeli kullan",
     "useDefaultUrl": "Varsayılan URL’yi kullan",
@@ -1082,29 +1135,6 @@
     "gildataTokenDesc": "İsteğe bağlı Gildata verileri: düzeltilmiş A hissesi günlük fiyatları, ham Hong Kong/endeks fiyatları, borsa dışı fonların net varlık değerleri ve Çin makroekonomi, duyuru ve araştırma araçları.",
     "reasoningEffortXhigh": "Çok yüksek",
     "reasoningEffortReset": "Seçilen model {{level}} düzeyini desteklemiyor; sağlayıcı varsayılanına sıfırlandı."
-  },
-  "qveris": {
-    "title": "QVeris araç pazarı",
-    "subtitle": "Ücretsiz açık veriyi varsayılan tutun veya özel veri araçları için ücretli QVeris kullanımını etkinleştirin.",
-    "enabled": "Ücretli QVeris yolunu etkinleştir",
-    "baseUrl": "Temel URL",
-    "apiKey": "API anahtarı",
-    "apiKeyPlaceholder": "Mevcut anahtarı korumak için boş bırakın",
-    "mode": "Mod",
-    "modeFree": "Yalnızca ücretsiz açık veri",
-    "modePaid": "Ücretli QVeris etkin",
-    "budget": "Oturum başına kredi bütçesi",
-    "budgetHint": "Bu oturum bütçesine ulaşıldığında ücretli işlemler durur.",
-    "balance": "Kalan kredi",
-    "recentUsage": "Son kullanım",
-    "noUsage": "Yakın zamanda kullanım yok",
-    "signupCta": "Kayıt sayfasını aç",
-    "signupHint": "QVeris hesabınızı oluştururken bu davet kodunu kullanın.",
-    "inviteCode": "Davet kodu",
-    "save": "QVeris ayarlarını kaydet",
-    "saved": "QVeris ayarları kaydedildi",
-    "testFailed": "QVeris isteği başarısız",
-    "notConfigured": "Yapılandırılmadı"
   },
   "agent": {
     "reasoningStrength": "Akıl yürütme düzeyi",
@@ -2016,9 +2046,6 @@
     "pattern": "Grafik formasyonlarını tespit et",
     "portfolio_risk_xray": "Portföy riskini incele",
     "propose_mandate_profiles": "İşlem yetkisi öner",
-    "qveris_execute": "QVeris işlemini yürüt",
-    "qveris_inspect": "QVeris işlemini incele",
-    "qveris_search": "QVeris’te ara",
     "read_document": "Belgeyi oku",
     "read_file": "Dosyayı oku",
     "read_url": "Web sayfasını oku",
@@ -2170,6 +2197,15 @@
       "failed": "Okunamadı; toplama katılmadı",
       "lastSuccess": "Son başarılı okuma: {{time}}",
       "noSuccess": "Henüz başarılı okuma yok",
+      "cashDetails": "Nakit ve finansman",
+      "reportingCurrency": "Raporlama para birimi",
+      "financingLimit": "Finansman limiti",
+      "financingRemaining": "Kalan finansman",
+      "cashAvailable": "Kullanılabilir nakit",
+      "cashWithdrawable": "Çekilebilir nakit",
+      "cashFrozen": "Bloke nakit",
+      "cashSettling": "Takas bekleyen nakit",
+      "binanceRestrictedLocation": "Binance bu okumayı engelledi (HTTP 451): mevcut ağ konumu kısıtlı. Bölgenizde Binance kullanılabilirliğini kontrol edin ve desteklenen API uç noktasını kullanın.",
       "reconnect": "Yeniden bağlan",
       "retryRead": "Okumayı yeniden dene"
     },
@@ -2276,6 +2312,7 @@
       "testFailed": "{{label}} kontrolü başarısız: {{error}}",
       "unknownTestError": "Bağlantı bilinmeyen bir hata döndürdü.",
       "delete": "Sil",
+      "deleteInUse": "Bu bağlantıyı silmeden önce Portföy'den kaldırın ve değişiklikleri kaydedin.",
       "configured": "Gerekli kimlik bilgileri yapılandırıldı",
       "accountTitle": "Hesap",
       "accountCurrent": "Sonu ····{{last4}} olan hesabı okur",
@@ -2288,7 +2325,9 @@
       "accountDefault": " · aracı kurum varsayılanı",
       "accountDeactivated": " · devre dışı",
       "accountSave": "Bu hesabı kullan",
-      "accountSaved": "Hesap kaydedildi."
+      "accountSaved": "Hesap kaydedildi.",
+      "host": "Sunucu",
+      "port": "Bağlantı noktası"
     },
     "imports": {
       "title": "extraETF Investments içe aktar",
@@ -2313,7 +2352,8 @@
       "current": "Mevcut değer",
       "targetValue": "Hedef değer",
       "change": "Değer değişimi"
-    }
+    },
+    "quoteAsOf": "{{time}} itibarıyla fiyat"
   },
   "navigation": {
     "menu": "Özelliklere göz at",
@@ -2336,7 +2376,8 @@
       "runtime": "Aracı kurum bağlantılarını ve işlem çalışma durumunu kontrol edin.",
       "settings": "Modelleri, veri kaynaklarını ve aracı kurum bağlantılarını yapılandırın.",
       "pixelOffice": "Araştırma görevlerini planlayın ve atayın. Atama yürütmeyi başlatmaz; rütbeler yalnızca etikettir ve işlem yetkisi vermez.",
-      "paperTrading": "Günlük işlemleri sanal fonlarla deneyin. Aracı kuruma emir gönderilmez. Sonuçlar nakit temettüleri içermez ve toplam getiriyi göstermez."
+      "paperTrading": "Günlük işlemleri sanal fonlarla deneyin. Aracı kuruma emir gönderilmez. Sonuçlar nakit temettüleri içermez ve toplam getiriyi göstermez.",
+      "researchArtifacts": "Kanıta dayalı analizleri oturumlar arasında kaydedin ve yeniden kullanın."
     },
     "instructions": {
       "reports": "Önce araştırma asistanından bir stratejiyi geriye dönük test etmesini isteyin, ardından sonuçları burada açın. PDF ve diğer sohbet belgelerini özgün konuşmadan indirin.",
@@ -2348,7 +2389,8 @@
       "runtime": "Önce Ayarlar veya Portföy’de bir aracı kurum bağlantısı kurun. Kullanılabilir işlemler, kurumun yeteneklerine ve verdiğiniz yetkiye bağlıdır.",
       "settings": "Başlamak için bir model yapılandırın. Gerektikçe veri kaynakları veya aracı kurum bağlantıları ekleyin; kamuya açık piyasa araştırması için aracı kurum hesabı gerekmez.",
       "pixelOffice": "Araştırma görevlerini planlayın ve atayın. Atama yürütmeyi başlatmaz; rütbeler yalnızca etikettir ve işlem yetkisi vermez.",
-      "paperTrading": "Yalnızca tamamlanmış günlük mumlar işlenir. Stratejiler önceki günleri okur ve işlem gününün kapanışında gerçekleşir. Normal kapanıştan 30 dakika sonrasını bekleyin; otomatik çalıştırma planlanmaz."
+      "paperTrading": "Yalnızca tamamlanmış günlük mumlar işlenir. Stratejiler önceki günleri okur ve işlem gününün kapanışında gerçekleşir. Normal kapanıştan 30 dakika sonrasını bekleyin; otomatik çalıştırma planlanmaz.",
+      "researchArtifacts": "Önceki analizleri arayın, herhangi bir revizyonu açın veya yeni kanıtla bağlantılı revizyon oluşturun. Eski sonuçlar değişmez."
     }
   },
   "analysis": {
@@ -2534,5 +2576,65 @@
     "us": "ABD hisseleri · USD",
     "hk": "Hong Kong hisseleri · HKD",
     "cn_a": "Çin A hisseleri · CNY"
+  },
+  "shannon": {
+    "regionLabel": "Shannon portföy analizi",
+    "title": "Portföy stili ve riski",
+    "intro": "Gildata MCP Shannon hizmetiyle çalışır. Portföyün stil eğilimini, tek tek hisselerin özelliklerini ve portföy oynaklığına katkıda bulunan pozisyonları inceleyin.",
+    "notConfigured": "Analizi kullanmak için bir Gildata token'ı yapılandırın. Mevcut korelasyon analizi kullanılmaya devam eder.",
+    "holdingsLabel": "A hissesi pozisyonlarınız",
+    "holdingsHint": "Her satıra bir hisse: kod ve ağırlık. Eşit ağırlık için tüm ağırlıkları boş bırakın ya da toplamı %100 olacak şekilde tüm ağırlıkları girin. Yalnızca A hisseleri desteklenir; nakit ve diğer varlıklar otomatik olarak hariç tutulmaz.",
+    "holdingsInvalid": "Kodları, yinelenen hisseleri ve ağırlıkları yukarıdaki biçime göre kontrol edin.",
+    "dateLabel": "Analiz tarihi (isteğe bağlı)",
+    "dateHint": "Girilen pozisyonları bu tarihteki verilerle analiz eder; geçmişteki gerçek hesap pozisyonlarınızı göstermez.",
+    "dateLatestHint": "En güncel veriler için boş bırakın",
+    "publishedThrough": "Veriler {{date}} tarihine kadar yayımlandı",
+    "useLatest": "En güncel verileri kullan",
+    "analyze": "Pozisyonları analiz et",
+    "analyzing": "Analiz ediliyor…",
+    "retry": "Tekrar Dene",
+    "serviceUnavailable": "Hizmet kullanılamıyor. Lütfen tekrar deneyin.",
+    "analysisDate": "Gerçek analiz tarihi {{date}}",
+    "included": "{{included}}/{{requested}} hisse dahil edildi",
+    "equalWeight": "Eşit ağırlık varsayımı",
+    "enteredWeights": "Girilen ağırlıklar kullanılıyor",
+    "riskDate": "Risk tahmini tarihi {{date}}",
+    "dateFallback": "İstenen tarih {{requested}}; kullanılan mevcut veri tarihi {{actual}}.",
+    "partial": "Bazı hisseler dahil edilmedi. Model sonuçları portföyün tamamını değil, yalnızca kapsanan kısmı açıklar.",
+    "coveredWeight": "Kapsanan girilmiş ağırlık {{weight}}.",
+    "sourceLimitations": "Veri kaynağı bu analizde kısıtlamalar bildirdi; tahminleri dikkatle yorumlayın.",
+    "styleTitle": "Portföy stil maruziyeti",
+    "styleAxis": "Düşük ← Model referansı 0 → Yüksek",
+    "styleNote": "Kırmızı daha yüksek, yeşil daha düşük anlamına gelir; sıfırdan uzaklık eğilimin gücünü gösterir. Değerler standartlaştırılmış özelliklerdir, ağırlık veya tahmin değildir; piyasa betası da standartlaştırılmıştır, ham regresyon betası değildir. Eksik veya yetersiz kapsam — olarak gösterilir.",
+    "viewStockStyles": "Hisse stillerini göster",
+    "heatmapTitle": "Hisse bazında stil maruziyeti ısı haritası",
+    "heatmapNote": "Satırlar hisseleri gösterir; sütunlar yukarıdaki faktör sırasını izler. Kırmızı daha yüksek, yeşil daha düşüktür; renkler ±2'de doygunluğa ulaşır, değerler kırpılmaz. Bunlar hisse özellikleridir, hissenin risk katkısının ayrıştırması değildir.",
+    "missingData": "Veri eksik",
+    "noStockStyle": "Kullanılabilir hisse stil verisi yok.",
+    "riskTitle": "Risk ayrıştırması: oynaklık kaynakları",
+    "mainContributor": "Döndürülen hisseler arasında portföy oynaklığına tahmini en büyük katkıyı {{name}} yapıyor.",
+    "riskNote": "Portföy oynaklığının nerede yoğunlaştığını bulun ve ilgili ağırlıkları öncelikle gözden geçirin. Ağırlık, sermaye payıdır; oynaklık payı, hissenin oynaklık katkısının toplam portföy oynaklığına bölünmesidir. Çubuklar gösterilen en büyük katkıya göre ölçeklenir.",
+    "diversifying": "Çeşitlendirici",
+    "addingVolatility": "Oynaklığı artırıyor",
+    "zeroContribution": "Sıfır katkı",
+    "riskFootnote": "Mutlak değerce en büyük beş katkıyı gösterir. Paylar zarar olasılığı ya da satış sonrası öngörülen risk azalması değildir; negatif olabilir veya %100'ü aşabilir ve ilk beşin toplamı %100 olmayabilir. Negatif katkılar oynaklığı çeşitlendirir. Hisseye özgü risk için ortak bir oynaklık varsayımı kullanılır.",
+    "noData": "Kullanılabilir veri yok; eksik değerler sıfır sayılmaz.",
+    "colStock": "Hisse",
+    "colAllocation": "Ağırlık",
+    "colContribution": "Katkı",
+    "colShare": "Portföy oynaklık payı",
+    "colShareLabel": "Portföy oynaklığına katkı payı",
+    "factors": {
+      "BETA": "Piyasa betası",
+      "VALUE": "Değer",
+      "GROWTH": "Büyüme",
+      "QUALITY": "Kalite",
+      "MOMENTUM_12M": "12 aylık momentum",
+      "MOMENTUM_6M": "6 aylık momentum",
+      "VOLATILITY": "Oynaklık",
+      "LIQUIDITY": "Likidite",
+      "SIZE": "Büyüklük",
+      "LEVERAGE": "Kaldıraç"
+    }
   }
 }

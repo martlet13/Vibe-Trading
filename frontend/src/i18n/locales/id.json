@@ -1,6 +1,21 @@
 {
+  "gildata": {
+    "partner": "Mitra data · Gildata",
+    "website": "Akses MCP dan pendaftaran",
+    "features": "Fitur opsional Gildata",
+    "optInHelp": "Kesembilan fitur nonaktif secara bawaan. Token yang tersimpan tidak mengaktifkan fitur apa pun, termasuk setelah pembaruan. Meski fitur harga pasar aktif, Gildata hanya digunakan jika dipilih secara eksplisit. Jika sumber gratis gagal, sistem tidak beralih ke Gildata.",
+    "fund_nav": "Nilai aktiva bersih reksa dana",
+    "macro_series": "Indikator makroekonomi Tiongkok",
+    "announcements": "Pengumuman perusahaan dan reksa dana",
+    "broker_reports": "Laporan riset broker",
+    "market_quotes": "Harga pasar (hanya jika Gildata dipilih secara eksplisit)",
+    "fin_query": "Kueri keuangan gabungan",
+    "stock_selection": "Penyaringan saham",
+    "symbol_search": "Sertakan Gildata dalam pencarian efek",
+    "shannon": "Diagnosis portofolio (Shannon)"
+  },
   "app": {
-    "version": "v0.1.18"
+    "version": "v0.1.19"
   },
   "charts": {
     "noPriceData": "Belum ada data harga untuk simbol ini",
@@ -29,7 +44,8 @@
       "runtime": "Periksa koneksi broker dan status pelaksanaan perdagangan.",
       "settings": "Atur model, sumber data, dan koneksi broker.",
       "pixelOffice": "Rencanakan dan tugaskan riset. Penugasan tidak memulai eksekusi; pangkat hanya label dan tidak memberikan izin transaksi.",
-      "paperTrading": "Uji transaksi harian dengan dana virtual. Tidak ada pesanan yang dikirim ke broker. Hasil tidak mencakup dividen tunai dan bukan imbal hasil total."
+      "paperTrading": "Uji transaksi harian dengan dana virtual. Tidak ada pesanan yang dikirim ke broker. Hasil tidak mencakup dividen tunai dan bukan imbal hasil total.",
+      "researchArtifacts": "Simpan dan gunakan kembali analisis berbasis bukti antarsesi."
     },
     "instructions": {
       "reports": "Minta asisten melakukan backtest strategi terlebih dahulu, lalu buka hasilnya di sini. Unduh PDF dan dokumen yang dibuat di chat dari percakapan asal.",
@@ -41,7 +57,8 @@
       "runtime": "Atur koneksi broker di Pengaturan atau Portofolio terlebih dahulu. Tindakan perdagangan yang tersedia bergantung pada kemampuan broker dan otorisasi Anda.",
       "settings": "Atur model untuk memulai. Tambahkan data atau koneksi broker sesuai kebutuhan; riset data pasar publik tidak memerlukan akun broker.",
       "pixelOffice": "Rencanakan dan tugaskan riset. Penugasan tidak memulai eksekusi; pangkat hanya label dan tidak memberikan izin transaksi.",
-      "paperTrading": "Hanya candle harian yang selesai dapat diproses. Strategi membaca hari sebelumnya dan dieksekusi pada penutupan hari eksekusi. Tunggu 30 menit setelah penutupan reguler; tidak ada eksekusi otomatis yang dijadwalkan."
+      "paperTrading": "Hanya candle harian yang selesai dapat diproses. Strategi membaca hari sebelumnya dan dieksekusi pada penutupan hari eksekusi. Tunggu 30 menit setelah penutupan reguler; tidak ada eksekusi otomatis yang dijadwalkan.",
+      "researchArtifacts": "Cari analisis sebelumnya, buka revisi apa pun, atau buat revisi tertaut dengan bukti baru. Kesimpulan lama tetap tidak berubah."
     }
   },
   "layout": {
@@ -73,7 +90,41 @@
     "about": "Tentang",
     "sessionsLoadFailed": "Percakapan tidak dapat dimuat.",
     "pixelOffice": "Kantor piksel",
-    "paperTrading": "Trading simulasi"
+    "paperTrading": "Trading simulasi",
+    "researchArtifacts": "Artefak riset"
+  },
+  "researchArtifacts": {
+    "completeness": "Kelengkapan",
+    "optionalLinks": "ID tertaut opsional",
+    "formTitleNew": "Simpan riset",
+    "verification": "Verifikasi",
+    "subject": "Subjek riset",
+    "createdNotice": "Revisi {{id}} dibuat.",
+    "emptyHint": "Simpan analisis untuk menggunakan kembali kesimpulan dan buktinya di sesi berikutnya.",
+    "newResearch": "Riset baru",
+    "emptyTitle": "Belum ada artefak riset",
+    "save": "Simpan riset",
+    "evidenceMissing": "Tidak ada referensi bukti terlampir",
+    "saveError": "Tidak dapat menyimpan artefak riset.",
+    "additionalEvidence": "URI bukti tambahan (satu per baris)",
+    "subtitle": "Gunakan kembali analisis berbasis bukti antarsesi tanpa menimpa revisi sebelumnya.",
+    "revise": "Revisi dari revisi ini",
+    "history": "Riwayat revisi",
+    "searchPlaceholder": "Cari subjek, universe, atau konten",
+    "loadError": "Tidak dapat memuat artefak riset.",
+    "close": "Tutup",
+    "universe": "Universe (opsional)",
+    "title": "Artefak riset",
+    "dataAsOf": "Data per",
+    "content": "Konten riset",
+    "saving": "Menyimpan…",
+    "idempotentNotice": "Konten dan asal-usul yang sama sudah ada di {{id}}.",
+    "formTitleRevision": "Buat revisi tertaut",
+    "evidence": "Referensi bukti",
+    "hypothesis_id": "ID hipotesis",
+    "goal_id": "ID tujuan",
+    "session_id": "ID sesi",
+    "run_id": "ID proses"
   },
   "runtime": {
     "monitorBadge": "Monitor Runtime",
@@ -411,6 +462,7 @@
     "taskSubtitle": "Tanyakan tentang saham, strategi, atau portofolio Anda — saya akan mengambil data, menghitung angkanya, dan menampilkan setiap langkah.",
     "quickActions": "Aksi cepat",
     "browseAllExamples": "Lihat semua contoh",
+    "featured": "Contoh pilihan",
     "greetings": {
       "morning1": "Selamat pagi.",
       "morning2": "Pagi — siap saat Anda siap.",
@@ -455,6 +507,9 @@
     "reasoningEffortHigh": "Tinggi",
     "reasoningEffortXhigh": "Sangat tinggi",
     "reasoningEffortMax": "Maksimum",
+    "reasoningEffortMinimal": "Minimal",
+    "reasoningEffortUltra": "Ultra",
+    "reasoningEffortPersistent": "Berkelanjutan",
     "reasoningEffortDesc": "Mengatur kedalaman reasoning pada model yang mendukung. Tingkat yang lebih tinggi dapat meningkatkan analisis kompleks tetapi bisa membutuhkan waktu lebih lama; provider yang tidak mendukung dapat mengabaikan pengaturan ini. Tidak ada (eksplisit) mengirim field dengan reasoning dinonaktifkan — beberapa model OpenAI memerlukannya agar dapat menggunakan tool.",
     "reasoningEffortReset": "Model yang dipilih tidak mendukung {{level}}; dikembalikan ke Provider bawaan.",
     "useDefaultModel": "Gunakan model default",
@@ -1118,29 +1173,6 @@
     "apiKey": "API key",
     "tushareTokenDesc": "Digunakan untuk data A-share China, futures, fund, dan makro. Jika tidak diatur, proyek akan menggunakan AKShare sebagai fallback jika tersedia.",
     "gildataTokenDesc": "Data Gildata opsional: harga harian saham A yang disesuaikan, harga mentah saham Hong Kong/indeks, NAB reksa dana di luar bursa, serta alat makroekonomi, pengumuman, dan riset Tiongkok."
-  },
-  "qveris": {
-    "title": "Marketplace Tool QVeris",
-    "subtitle": "Gunakan data publik gratis sebagai pilihan bawaan, atau aktifkan eksekusi QVeris berbayar untuk tool data khusus.",
-    "enabled": "Aktifkan rute QVeris berbayar",
-    "baseUrl": "URL Dasar",
-    "apiKey": "API key",
-    "apiKeyPlaceholder": "Biarkan kosong untuk mempertahankan key saat ini",
-    "mode": "Mode",
-    "modeFree": "Hanya data publik gratis",
-    "modePaid": "QVeris berbayar diaktifkan",
-    "budget": "Anggaran kredit per sesi",
-    "budgetHint": "Eksekusi berbayar berhenti saat anggaran sesi ini tercapai.",
-    "balance": "Sisa kredit",
-    "recentUsage": "Penggunaan terbaru",
-    "noUsage": "Belum ada penggunaan terbaru",
-    "signupCta": "Buka pendaftaran",
-    "signupHint": "Gunakan kode undangan ini saat membuat akun QVeris.",
-    "inviteCode": "Kode undangan",
-    "save": "Simpan pengaturan QVeris",
-    "saved": "Pengaturan QVeris tersimpan",
-    "testFailed": "Permintaan QVeris gagal",
-    "notConfigured": "Belum dikonfigurasi"
   },
   "agent": {
     "reasoningStrength": "Tingkat Reasoning",
@@ -2052,9 +2084,6 @@
     "pattern": "Deteksi pola chart",
     "portfolio_risk_xray": "X-ray risiko portofolio",
     "propose_mandate_profiles": "Usulkan mandat trading",
-    "qveris_execute": "Jalankan aksi QVeris",
-    "qveris_inspect": "Periksa aksi QVeris",
-    "qveris_search": "Cari QVeris",
     "read_document": "Baca dokumen",
     "read_file": "Baca file",
     "read_url": "Baca halaman web",
@@ -2206,6 +2235,15 @@
       "failed": "Tidak dapat dibaca — tidak dihitung dalam total",
       "lastSuccess": "Terakhir berhasil dibaca {{time}}",
       "noSuccess": "Belum pernah berhasil dibaca",
+      "cashDetails": "Kas dan pembiayaan",
+      "reportingCurrency": "Mata uang laporan",
+      "financingLimit": "Batas pembiayaan",
+      "financingRemaining": "Sisa pembiayaan",
+      "cashAvailable": "Kas tersedia",
+      "cashWithdrawable": "Kas yang dapat ditarik",
+      "cashFrozen": "Kas dibekukan",
+      "cashSettling": "Kas dalam penyelesaian",
+      "binanceRestrictedLocation": "Binance memblokir pembacaan ini (HTTP 451): lokasi jaringan saat ini dibatasi. Periksa ketersediaan Binance di wilayah Anda dan gunakan endpoint API yang didukung.",
       "reconnect": "Hubungkan ulang",
       "retryRead": "Coba baca lagi"
     },
@@ -2312,6 +2350,7 @@
       "testFailed": "Pemeriksaan {{label}} gagal: {{error}}",
       "unknownTestError": "Connector mengembalikan error yang tidak diketahui.",
       "delete": "Hapus",
+      "deleteInUse": "Keluarkan koneksi ini dari Posisi akun dan simpan perubahan sebelum menghapus koneksi tersebut.",
       "configured": "Kredensial wajib sudah dikonfigurasi",
       "accountTitle": "Akun",
       "accountCurrent": "Membaca akun yang berakhiran ····{{last4}}",
@@ -2324,7 +2363,9 @@
       "accountDefault": " · default broker",
       "accountDeactivated": " · dinonaktifkan",
       "accountSave": "Gunakan akun ini",
-      "accountSaved": "Akun tersimpan."
+      "accountSaved": "Akun tersimpan.",
+      "host": "Host",
+      "port": "Port"
     },
     "imports": {
       "title": "Impor extraETF Investments",
@@ -2349,7 +2390,8 @@
       "current": "Nilai saat ini",
       "targetValue": "Nilai target",
       "change": "Perubahan nilai"
-    }
+    },
+    "quoteAsOf": "Harga per {{time}}"
   },
   "analysis": {
     "updated": "Diperbarui",
@@ -2534,5 +2576,65 @@
     "us": "Saham AS · USD",
     "hk": "Saham Hong Kong · HKD",
     "cn_a": "Saham A Tiongkok · CNY"
+  },
+  "shannon": {
+    "regionLabel": "Diagnosis portofolio Shannon",
+    "title": "Gaya dan risiko portofolio",
+    "intro": "Didukung layanan Shannon dari Gildata MCP. Telusuri gaya portofolio, karakteristik tiap saham, dan kepemilikan yang berkontribusi pada volatilitas portofolio.",
+    "notConfigured": "Atur token Gildata untuk menggunakan diagnosis. Analisis korelasi yang ada tetap tersedia.",
+    "holdingsLabel": "Kepemilikan A-share Anda",
+    "holdingsHint": "Satu saham per baris: kode dan bobot. Kosongkan semua bobot untuk bobot yang sama, atau isi semua bobot dengan total 100%. Hanya saham A-share; kas dan aset lain tidak dikeluarkan secara otomatis.",
+    "holdingsInvalid": "Periksa kode, duplikat, dan bobot sesuai format di atas.",
+    "dateLabel": "Tanggal acuan (opsional)",
+    "dateHint": "Menganalisis kepemilikan yang dimasukkan pada tanggal ini, bukan kepemilikan historis akun Anda.",
+    "dateLatestHint": "Kosongkan untuk memakai data terbaru yang tersedia",
+    "publishedThrough": "Data dipublikasikan hingga {{date}}",
+    "useLatest": "Gunakan data terbaru",
+    "analyze": "Analisis kepemilikan",
+    "analyzing": "Menganalisis…",
+    "retry": "Coba lagi",
+    "serviceUnavailable": "Layanan tidak tersedia. Silakan coba lagi.",
+    "analysisDate": "Tanggal analisis aktual {{date}}",
+    "included": "{{included}}/{{requested}} saham disertakan",
+    "equalWeight": "Asumsi bobot sama",
+    "enteredWeights": "Menggunakan bobot yang dimasukkan",
+    "riskDate": "Tanggal estimasi risiko {{date}}",
+    "dateFallback": "Tanggal yang diminta {{requested}}; tanggal data tersedia yang digunakan {{actual}}.",
+    "partial": "Beberapa saham dikecualikan. Hasil model hanya menggambarkan bagian yang tercakup, bukan seluruh portofolio.",
+    "coveredWeight": "Bobot masukan yang tercakup {{weight}}.",
+    "sourceLimitations": "Sumber data melaporkan keterbatasan; tafsirkan estimasi ini dengan hati-hati.",
+    "styleTitle": "Eksposur gaya portofolio",
+    "styleAxis": "Lebih rendah ← Acuan model 0 → Lebih tinggi",
+    "styleNote": "Merah berarti lebih tinggi, hijau lebih rendah; jarak dari nol menunjukkan kecenderungan. Nilai adalah karakteristik terstandardisasi, bukan bobot atau prediksi; beta pasar juga terstandardisasi, bukan beta regresi mentah. Data yang hilang atau cakupan yang tidak lengkap ditampilkan sebagai —.",
+    "viewStockStyles": "Lihat gaya per saham",
+    "heatmapTitle": "Heatmap eksposur gaya per saham",
+    "heatmapNote": "Baris adalah saham; kolom mengikuti urutan faktor di atas. Merah lebih tinggi dan hijau lebih rendah; warna jenuh pada ±2 tanpa memotong nilai. Ini adalah karakteristik saham, bukan rincian kontribusi risiko saham tersebut.",
+    "missingData": "Data tidak tersedia",
+    "noStockStyle": "Tidak ada data gaya per saham yang tersedia.",
+    "riskTitle": "Atribusi risiko: sumber volatilitas",
+    "mainContributor": "{{name}} memiliki estimasi kontribusi volatilitas terbesar di antara saham yang dikembalikan.",
+    "riskNote": "Temukan di mana volatilitas portofolio terkonsentrasi dan tinjau bobot terkait terlebih dahulu. Bobot adalah porsi modal; porsi volatilitas adalah kontribusi volatilitas saham dibagi total volatilitas portofolio. Batang diskalakan terhadap kontribusi terbesar yang ditampilkan.",
+    "diversifying": "Mendiversifikasi",
+    "addingVolatility": "Menambah volatilitas",
+    "zeroContribution": "Kontribusi nol",
+    "riskFootnote": "Menampilkan lima kontribusi terbesar menurut nilai absolut. Porsi ini bukan probabilitas kerugian atau prediksi penurunan risiko jika dijual; nilainya bisa negatif atau melebihi 100%, dan lima teratas belum tentu berjumlah 100%. Kontribusi negatif mendiversifikasi volatilitas. Risiko spesifik saham menggunakan asumsi volatilitas yang sama.",
+    "noData": "Tidak ada data; nilai yang hilang tidak dianggap nol.",
+    "colStock": "Saham",
+    "colAllocation": "Bobot",
+    "colContribution": "Kontribusi",
+    "colShare": "Porsi volatilitas portofolio",
+    "colShareLabel": "Porsi kontribusi volatilitas portofolio",
+    "factors": {
+      "BETA": "Beta pasar",
+      "VALUE": "Value",
+      "GROWTH": "Pertumbuhan",
+      "QUALITY": "Kualitas",
+      "MOMENTUM_12M": "Momentum 12 bulan",
+      "MOMENTUM_6M": "Momentum 6 bulan",
+      "VOLATILITY": "Volatilitas",
+      "LIQUIDITY": "Likuiditas",
+      "SIZE": "Ukuran",
+      "LEVERAGE": "Leverage"
+    }
   }
 }

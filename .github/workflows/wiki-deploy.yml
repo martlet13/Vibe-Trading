@@ -27,7 +27,7 @@ jobs:
       # The Alpha Library pages are generated, not committed: export the
       # registry's manifest and render one page per alpha before uploading.
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
 
@@ -37,6 +37,19 @@ jobs:
           vibe-trading alpha export-manifest --out wiki/alpha-library/manifest.json --force
           python wiki/scripts/build_alpha_library.py --clean
           test -f wiki/alpha-library/content/index.json
+
+      # The docs pages are client-rendered. Write one static HTML file per URL
+      # so a crawler that never runs JavaScript (GPTBot, ClaudeBot,
+      # PerplexityBot) still gets the article body, its own canonical and the
+      # hreflang pair; then regenerate the sitemap from what was just written.
+      - name: Prerender docs and regenerate the sitemap
+        working-directory: wiki
+        run: |
+          node scripts/prerender_docs.mjs
+          node scripts/gen_sitemap.mjs
+          test -f docs/latest/tools/alpha-zoo.html
+          test -f docs/zh/tools/alpha-zoo.html
+          test "$(grep -c '<loc>' sitemap.xml)" -ge 42
 
       - name: Deploy wiki
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3

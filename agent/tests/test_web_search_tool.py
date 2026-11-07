@@ -40,9 +40,12 @@ def _patch_ddgs(monkeypatch, text_impl):
 
 @pytest.fixture(autouse=True)
 def _clear_backend_env(monkeypatch):
+    monkeypatch.delenv("VIBE_TRADING_SEARCH_PARALLEL", raising=False)
     monkeypatch.delenv("VIBE_TRADING_SEARCH_BACKENDS", raising=False)
     monkeypatch.delenv("VIBE_TRADING_SEARCH_BING_FALLBACK", raising=False)
     monkeypatch.delenv("ALIYUN_IQS_API_KEY", raising=False)
+    monkeypatch.setattr("src.tools.web_search_tool._sogou_search", MagicMock(return_value=[]))
+    monkeypatch.setattr("src.tools.web_search_tool._bing_cn_search", MagicMock(return_value=[]))
 
 
 def test_returns_results_and_passes_backend_list(monkeypatch):
@@ -97,7 +100,7 @@ def test_retries_transient_failure_then_succeeds(monkeypatch):
 
 
 def test_no_results_is_ok_empty_not_error(monkeypatch):
-    """ddgs raising 'No results found.' yields an ok+empty envelope, not ❌."""
+    """Empty answers from all enabled sources remain an ok+empty envelope."""
     monkeypatch.setattr("src.tools.web_search_tool.time.sleep", lambda *_: None)
 
     def text_impl(query, max_results, **kwargs):
@@ -109,6 +112,78 @@ def test_no_results_is_ok_empty_not_error(monkeypatch):
     assert out["status"] == "ok"
     assert out["results"] == []
     assert "note" in out
+
+
+@pytest.mark.parametrize("raises_empty", [False, True])
+def test_empty_ddgs_tries_existing_fallbacks(monkeypatch, raises_empty):
+    """An empty ddgs answer does not establish that other sources are empty."""
+    calls = []
+
+    def text_impl(query, max_results, **kwargs):
+        calls.append("ddgs")
+        if raises_empty:
+            raise RuntimeError("No results found.")
+        return []
+
+    def sogou(query, max_results):
+        calls.append("sogou")
+        return []
+
+    def bing(query, max_results):
+        calls.append("bing_cn")
+        return [{"title": "Earnings", "href": "https://example.test/earnings", "body": "Report"}]
+
+    monkeypatch.setattr("src.tools.web_search_tool._sogou_search", sogou)
+    monkeypatch.setattr("src.tools.web_search_tool._bing_cn_search", bing)
+    with _patch_ddgs(monkeypatch, text_impl):
+        out = json.loads(WebSearchTool().execute(query="quarterly earnings"))
+
+    assert calls == ["ddgs", "sogou", "bing_cn"]
+    assert out["status"] == "ok"
+    assert out["backends"] == "bing_cn_fallback"
+    assert out["results"][0]["url"] == "https://example.test/earnings"
+
+
+def test_empty_ddgs_respects_disabled_fallbacks(monkeypatch):
+    monkeypatch.setenv("VIBE_TRADING_SEARCH_BING_FALLBACK", "0")
+    forbidden = MagicMock(side_effect=AssertionError("fallback disabled"))
+    monkeypatch.setattr("src.tools.web_search_tool._sogou_search", forbidden)
+    monkeypatch.setattr("src.tools.web_search_tool._bing_cn_search", forbidden)
+    with _patch_ddgs(monkeypatch, lambda *a, **kw: []):
+        out = json.loads(WebSearchTool().execute(query="unmatched query"))
+    assert out["status"] == "ok"
+    assert out["results"] == []
+    forbidden.assert_not_called()
+
+
+def test_empty_ddgs_does_not_hide_a_fallback_outage(monkeypatch):
+    unavailable = MagicMock(side_effect=RuntimeError("Connection timed out"))
+    monkeypatch.setattr("src.tools.web_search_tool._sogou_search", unavailable)
+    with _patch_ddgs(monkeypatch, lambda *a, **kw: []):
+        out = json.loads(WebSearchTool().execute(query="quarterly earnings"))
+    unavailable.assert_called_once()
+    assert out["status"] == "error"
+    assert "Connection timed out" in out["error"]
+
+
+def test_nonempty_ddgs_does_not_invoke_fallbacks(monkeypatch):
+    forbidden = MagicMock(side_effect=AssertionError("already have results"))
+    monkeypatch.setattr("src.tools.web_search_tool._sogou_search", forbidden)
+    monkeypatch.setattr("src.tools.web_search_tool._bing_cn_search", forbidden)
+    with _patch_ddgs(monkeypatch, lambda *a, **kw: [{"title": "result", "href": "https://example.test"}]):
+        out = json.loads(WebSearchTool().execute(query="quarterly earnings"))
+    assert out["status"] == "ok"
+    forbidden.assert_not_called()
+
+
+def test_backend_compatibility_failure_is_not_empty_success(monkeypatch):
+    def text_impl(query, max_results, **kwargs):
+        raise TypeError("unsupported client signature")
+
+    with _patch_ddgs(monkeypatch, text_impl):
+        out = json.loads(WebSearchTool().execute(query="quarterly earnings"))
+    assert out["status"] == "error"
+    assert "unsupported client signature" in out["error"]
 
 
 def test_persistent_failure_returns_actionable_error(monkeypatch):

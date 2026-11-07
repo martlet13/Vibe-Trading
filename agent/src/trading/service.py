@@ -107,6 +107,9 @@ def _sdk_config(
     if connection.profile_id != profile.id:
         raise ValueError("local connection profile does not match the requested SDK profile")
 
+    if profile.connector == "futu" and connection.endpoint is not None:
+        options = {**connection.endpoint, **{key: value for key, value in options.items() if value not in (None, "")}}
+
     fields = credential_fields(profile.id)
     direct_secret_fields = set(fields).intersection(options)
     if direct_secret_fields:
@@ -330,7 +333,17 @@ def get_quote(
     sec_type: str = "STK",
     **overrides: Any,
 ) -> dict[str, Any]:
-    """Read a quote for a connector profile."""
+    """Read a quote for a connector profile.
+
+    Args:
+        symbol: Instrument symbol to quote.
+        profile_id: Connector profile to read through.
+        exchange: IBKR exchange, ignored off the local TWS transport.
+        currency: Quote currency, ignored off the local TWS transport.
+        sec_type: IBKR security type, ignored off the local TWS transport.
+        **overrides: ``interactive_oauth=False`` keeps an expired grant from
+            opening a browser, matching the other remote MCP reads.
+    """
     profile = profile_by_id(profile_id)
     if profile.transport == "local_tws":
         from src.trading.connectors.ibkr.local import get_quote as _get_quote
@@ -353,7 +366,12 @@ def get_quote(
             profile,
             _local_plugin_call(profile, "get_quote", overrides, symbol),
         )
-    return _call_remote(profile, "quote", {"symbols": [symbol], "symbol": symbol})
+    return _call_remote(
+        profile,
+        "quote",
+        {"symbols": [symbol], "symbol": symbol},
+        interactive_oauth=bool(overrides.get("interactive_oauth", True)),
+    )
 
 
 def search_instruments(
@@ -1441,6 +1459,15 @@ def _ibkr_config(profile: TradingProfile, overrides: dict[str, Any]):
         cfg = base
     else:
         cfg = default_cfg
+    connection_id = _clean(overrides.get("connection_id"))
+    if connection_id is not None:
+        from src.trading.connections import ConnectionStore
+
+        connection = ConnectionStore().get(connection_id)
+        if connection.profile_id != profile.id:
+            raise ValueError("local connection profile does not match the requested IBKR profile")
+        if connection.endpoint is not None:
+            cfg = cfg.with_overrides(**connection.endpoint)
     return cfg.with_overrides(
         host=_clean(overrides.get("host")),
         port=_int_or_none(overrides.get("port")),
@@ -1573,12 +1600,69 @@ def _call_remote(
         else MCPServerAdapter(server_name, server, interactive_oauth=False)
     )
     call_result = adapter.call_tool(remote_name, _remote_arguments(profile.connector, operation, arguments))
-    call_result = _normalize_remote_result(profile.connector, operation, call_result)
+    call_result = _complete_paginated_reply(
+        profile.connector, operation, call_result, adapter, remote_name, arguments
+    )
+    if profile.connector == "robinhood" and operation == "quote":
+        from src.trading.connectors.robinhood.mcp import normalize_result
+
+        call_result = normalize_result(operation, call_result, expected_symbol=arguments.get("symbol"))
+    else:
+        call_result = _normalize_remote_result(profile.connector, operation, call_result)
     account_number = arguments.get("account_number")
     if account_number:
         call_result = dict(call_result)
         call_result.setdefault("account_number", account_number)
     return _with_profile(profile, call_result)
+
+
+def _complete_paginated_reply(
+    connector: str,
+    operation: str,
+    envelope: dict[str, Any],
+    adapter: Any,
+    remote_name: str,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    """Follow a connector's advertised pagination cursor to the last page.
+
+    Robinhood's list reads answer one page at a time: the reply's ``next`` is
+    an opaque cursor the schema directs callers to pass back verbatim as the
+    tool's ``cursor`` argument, other arguments unchanged, until it comes back
+    empty. The portfolio needs the whole account, so the generic read follows
+    the cursor here, before any mapping runs, and hands the mappers one
+    complete reply. A connector or operation without a mapped cursor keeps the
+    single-page reply, and its mapping refuses a non-empty ``next`` as before.
+
+    Args:
+        connector: Broker key the profile selects.
+        operation: Generic read operation that produced the reply.
+        envelope: The first page's ``MCPServerAdapter.call_tool`` result.
+        adapter: The MCP adapter the first call went through.
+        remote_name: Remote tool name the first call used.
+        arguments: Wire arguments of the first call, re-sent unchanged (plus
+            the cursor) on every follow-up page.
+
+    Returns:
+        The first envelope unchanged when there is nothing to follow, else
+        the connector's merged whole-account reply.
+
+    Raises:
+        ValueError: If a follow-up page fails or breaks shape, per the
+            connector's pagination helper. A partial multi-page read is never
+            returned.
+    """
+    if connector != "robinhood" or operation not in ("positions", "orders"):
+        return envelope
+    from src.trading.connectors.robinhood import mcp
+
+    def refetch(cursor: str) -> dict[str, Any]:
+        return adapter.call_tool(
+            remote_name, _remote_arguments(connector, operation, {**arguments, "cursor": cursor})
+        )
+
+    list_key = "positions" if operation == "positions" else "orders"
+    return mcp.with_all_pages(envelope, list_key, remote_name, refetch)
 
 
 def _remote_tool_name(connector: str, operation: str) -> str | None:

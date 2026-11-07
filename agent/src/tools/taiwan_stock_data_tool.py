@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from src.agent.tools import BaseTool
+from src.tools._arguments import boolean_argument
 from src.config.accessor import get_env_config
 
 DEFAULT_DB_PATH = "/data/tw-stock/latest.db"
@@ -1180,12 +1181,7 @@ class TaiwanStockDataTool(BaseTool):
             else:
                 data = self._universe(
                     connection,
-                    active_only=bool(
-                        kwargs.get(
-                            "active_only",
-                            True,
-                        )
-                    ),
+                    active_only=boolean_argument(kwargs.get("active_only", True), field="active_only"),
                     market=kwargs.get("market"),
                     industry=kwargs.get("industry"),
                     limit=limit,

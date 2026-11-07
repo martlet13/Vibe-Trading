@@ -13,7 +13,11 @@ import pandas as pd
 
 from src.shadow_account.backtester import _LIQUID_BASKETS, SUPPORTED_MARKETS
 from src.shadow_account.indicators import RSI_PERIOD as _RSI_PERIOD, compute_rsi as _compute_rsi
-from src.shadow_account.models import ShadowProfile, ShadowRule
+from src.shadow_account.models import (
+    ShadowProfile,
+    ShadowRule,
+    canonical_comparison,
+)
 
 PriceFetcher = Callable[..., pd.DataFrame | None]
 
@@ -253,19 +257,20 @@ def _compare(value: float | bool, condition: Any) -> bool:
 
     if threshold is None:
         return True
-    if op in {">", "gt"}:
+    canonical = canonical_comparison(op)
+    if canonical is None:
+        return True
+    if canonical == ">":
         return value > threshold
-    if op in {">=", "gte", "ge"}:
+    if canonical == ">=":
         return value >= threshold
-    if op in {"<", "lt"}:
+    if canonical == "<":
         return value < threshold
-    if op in {"<=", "lte", "le"}:
+    if canonical == "<=":
         return value <= threshold
-    if op in {"==", "=", "eq"}:
+    if canonical == "==":
         return value == threshold
-    if op in {"!=", "<>", "ne"}:
-        return value != threshold
-    return True
+    return value != threshold
 
 
 def _int_condition_value(condition: Any, default: int) -> int:

@@ -193,11 +193,13 @@ def _attribution_load_equity(
     has_benchmark_column = "benchmark_equity" in fieldnames
     benchmark_all_blank = True
     for row in rows:
-        ret = _attribution_finite_float(row.get("ret"))
-        if ret is None:
-            continue
+        # Keep one entry per equity row. Dropping only an invalid portfolio
+        # return would make adjacent benchmark equity values span a longer
+        # interval, then pair that multi-bar benchmark return with one bar of
+        # portfolio return below.
         dates.append(str(row.get("timestamp") or ""))
-        portfolio_returns.append(ret)
+        ret = _attribution_finite_float(row.get("ret"))
+        portfolio_returns.append(ret if ret is not None else float("nan"))
         if has_benchmark_column:
             benchmark_value = _attribution_finite_float(row.get("benchmark_equity"))
             if benchmark_value is not None:
@@ -206,7 +208,7 @@ def _attribution_load_equity(
             else:
                 benchmark_equity.append(float("nan"))
 
-    if not portfolio_returns:
+    if not any(math.isfinite(value) for value in portfolio_returns):
         return None, None, None, "missing"
 
     if not has_benchmark_column or benchmark_all_blank:
@@ -821,17 +823,18 @@ def _build_attribution_payload(run_dir: Path) -> Dict[str, Any]:
     config_benchmark = config.get("benchmark")
     if isinstance(config_benchmark, dict):
         config_benchmark = config_benchmark.get("ticker") or config_benchmark.get("code")
-    if config_benchmark is not None and str(config_benchmark).strip():
-        benchmark_ticker = str(config_benchmark).strip()
-    if benchmark_ticker is None:
-        _metrics_fields, metrics_rows = _attribution_read_csv(run_dir / "artifacts" / "metrics.csv")
-        if metrics_rows:
-            candidate = metrics_rows[0].get("benchmark_ticker")
-            if candidate is not None and str(candidate).strip():
-                benchmark_ticker = str(candidate).strip()
+    _, metrics_rows = _attribution_read_csv(run_dir / "artifacts" / "metrics.csv")
+    recorded = metrics_rows[0] if metrics_rows else {}
+    # New runs record the reference actually used, including a fallback after
+    # an explicit fetch failed. Older runs only had a ticker or the request.
+    if recorded.get("benchmark_kind") != "equal_weight":
+        candidate = recorded.get("benchmark_ticker") or config_benchmark
+        if candidate and str(candidate).strip() not in {"", "auto"}:
+            benchmark_ticker = str(candidate).strip()
 
     if benchmark_ticker is not None:
-        payload["benchmark"] = {"ticker": benchmark_ticker, "mode": "explicit"}
+        mode = "auto_market" if config_benchmark == "auto" else "explicit"
+        payload["benchmark"] = {"ticker": benchmark_ticker, "mode": mode}
     else:
         payload["benchmark"] = {"ticker": None, "mode": "auto_equal_weight"}
 

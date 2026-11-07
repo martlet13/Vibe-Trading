@@ -6,6 +6,7 @@ keyed on tool field names, never on natural language.
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import hashlib
 import json
@@ -15,7 +16,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
 
-from src.agent.grounding.figures import _CURRENCY_CODES
+from src.agent.grounding.figures import (
+    Figure,
+    _CURRENCY_CODES,
+    parse_figures_block,
+    scan_figures,
+)
 from src.agent.grounding.identity import (
     _CANONICAL_SYMBOL_RE,
     _infer_currency,
@@ -29,6 +35,10 @@ _PRICE_FIELDS = {"open", "high", "low", "close", "adj_close", "price"}
 _TIMESTAMP_FIELDS = ("trade_date", "date", "datetime", "timestamp", "time", "index")
 
 _MAX_GENERIC_EVIDENCE = 2_000
+
+#: Figures one document may contribute. A filing's text carries far more
+#: numbers than a tool result, and one long document must not crowd the ledger.
+_MAX_DOCUMENT_FIGURES = 400
 
 #: Top-level fields of a code-running tool's envelope (backtest, bash, ...). They
 #: describe the process, not the market, so they never become observed evidence.
@@ -173,7 +183,8 @@ _METADATA_COUNT_TAILS = frozenset(
 )
 
 # Money-denominated fields a currency-marked figure may quote besides a price:
-# a market-data row's amount, and the backtest engine's equity and P&L leaves.
+# a market-data row's amount, the backtest engine's equity and P&L leaves, and the
+# opening and closing valuation of a reported period.
 _AMOUNT_FIELDS = frozenset(
     {
         "amount",
@@ -186,6 +197,8 @@ _AMOUNT_FIELDS = frozenset(
         "total_pnl",
         "avg_pnl",
         "notional",
+        "value_start",
+        "value_end",
     }
 )
 
@@ -225,6 +238,19 @@ def _relative_posix(path: Path, root: Path) -> str:
     except (OSError, ValueError):
         return Path(path).as_posix()
     return "" if relative == "." else relative
+
+
+def _artifact_ref(path: Path, root: Path) -> str:
+    """``path`` as a ref names it: below the active run, else below its parent.
+
+    A backtest an earlier turn left is a sibling of the active run, so
+    ``<run id>/<backtest>/artifacts/metrics.csv`` names it exactly.
+    """
+    relative = _relative_posix(path, root)
+    if Path(relative).is_absolute():
+        with contextlib.suppress(OSError, ValueError):
+            return Path(path).resolve().relative_to(root.parent).as_posix()
+    return relative
 
 
 def _file_sha256(path: Path) -> str | None:
@@ -683,6 +709,66 @@ def _is_price_kind(record: EvidenceRecord) -> bool:
     )
 
 
+_PERCENT_HEADER = re.compile(r"(?:^[%％]$|[(（]\s*[%％]\s*[)）]$)")
+_NUMERIC_CELL = re.compile(r"[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
+
+
+def _document_percent_cells(text: str) -> str:
+    """Attach an explicit column unit to numeric cells before evidence scanning.
+
+    A PDF reader may flatten a table to whitespace. Only carry its header
+    across contiguous, equal-width numeric rows with a leading row label.
+    Preserve empty cells in delimited tables and reset on any ambiguous row.
+    """
+    if "%" not in text and "％" not in text:
+        return text
+    lines = text.splitlines(keepends=True)
+    columns: tuple[int, ...] = ()
+    layout = ("", 0)
+    for i, line in enumerate(lines):
+        row = line.rstrip("\r\n").strip(" ")
+        sep = "|" if "|" in row else "\t" if "\t" in row else ""
+        if sep == "|":
+            row = row.removeprefix("|").removesuffix("|")
+        if not sep:
+            row = row.strip()
+        delimiter = re.escape(sep) if sep else r"\s+"
+        parts = re.split(f"({delimiter})", row)
+        cells = [part.strip() for part in parts[::2]]
+        shape = (sep, len(cells))
+        if columns and shape == layout:
+            if sep == "|" and all(re.fullmatch(r":?-{2,}:?", c) for c in cells):
+                continue
+            if cells[0] and all(_NUMERIC_CELL.fullmatch(c) or c in {"", "—", "-"} for c in cells[1:]):
+                # Odd parts are the original delimiters.
+                for col in columns:
+                    pos = 2 * col
+                    if _NUMERIC_CELL.fullmatch(parts[pos].strip()):
+                        parts[pos] = parts[pos].rstrip() + "%"
+                lines[i] = line.replace(row, "".join(parts), 1)
+                continue
+        columns = tuple(j for j, c in enumerate(cells) if j and _PERCENT_HEADER.search(c))
+        if any(_NUMERIC_CELL.fullmatch(c) for c in cells):
+            columns = ()
+        layout = shape
+    return "".join(lines)
+
+
+def _document_field(figure: Figure) -> str:
+    """The evidence field a document's figure is recorded under.
+
+    The name carries the figure's written shape and nothing more. A document
+    does not say whether a number is revenue or a price, so a made-up semantic
+    name would let the gate's money and percent filters act on a distinction the
+    file never drew — while the shape is exactly what the reader did see.
+    """
+    if figure.percent:
+        return "document.ratio"
+    if figure.currency:
+        return "document.amount"
+    return "document.figure"
+
+
 class _EvidenceMixin:
     """Evidence behaviour of :class:`GroundingLedger`."""
 
@@ -882,7 +968,9 @@ class _EvidenceMixin:
                 self._record_backtest_outputs(root, call_id, scope)
         return recorded
 
-    def _record_backtest_outputs(self, directory: Path, call_id: str, scope: str) -> None:
+    def _record_backtest_outputs(
+        self, directory: Path, call_id: str, scope: str, *, verify_tables: bool = False
+    ) -> None:
         """Record every scalar of a backtest's summary outputs, and hash its tables.
 
         The run's Sortino, turnover, final equity, Monte Carlo p-values and
@@ -895,6 +983,8 @@ class _EvidenceMixin:
             directory: A backtest run directory, or the active run holding its copy.
             call_id: The backtest call that produced the outputs.
             scope: That backtest's run directory relative to the ledger's.
+            verify_tables: Register a table only if the run card lists it with
+                its current hash (for a run this ledger did not watch finish).
         """
         root = self.run_dir.resolve()
         manifest = _run_card_manifest(directory)
@@ -907,9 +997,9 @@ class _EvidenceMixin:
                 or self._is_model_written(path)
             ):
                 continue
-            if name not in _MANIFEST_EXEMPT and manifest.get(name) != _file_sha256(path):
+            if (name not in _MANIFEST_EXEMPT or (verify_tables and name != "run_card.json")) and manifest.get(name) != _file_sha256(path):
                 continue
-            artifact = _relative_posix(path, root)
+            artifact = _artifact_ref(path, root)
             self._evidence = [record for record in self._evidence if record.artifact != artifact]
             for field_name, value in _summary_scalars(path):
                 if room <= 0:
@@ -941,8 +1031,48 @@ class _EvidenceMixin:
                 ):
                     continue
                 digest = _file_sha256(path)
-                if digest is not None:
+                if digest is not None and (
+                    not verify_tables or manifest.get(f"artifacts/{path.name}") == digest
+                ):
                     self._engine_tables[str(path.resolve())] = (digest, scope)
+
+    def _adopt_prior_backtest(self, raw_dir: Any, call_id: str) -> None:
+        """Ground figures read from a backtest an earlier turn finished.
+
+        The ledger only watches backtests launched under the active run. A run
+        reused through ``list_backtest_runs`` + ``read_run_artifact`` is adopted
+        only if it sits in an allowed run root, its run card and ``metrics.csv``
+        agree, no file is a symlink or one the model wrote, and each table it
+        registers is listed in the run card manifest with the same hash. It is
+        named in a figure ref as ``<run id>/<backtest>`` (or ``backtest::<run id>/<backtest>``).
+        """
+        if not raw_dir:
+            return
+        from src.tools.path_utils import safe_run_dir
+
+        try:
+            directory = safe_run_dir(str(raw_dir))
+        except ValueError:
+            return
+        card, metrics = directory / "run_card.json", directory / "artifacts" / "metrics.csv"
+        if directory.is_relative_to(self.run_dir.resolve()) or any(
+            path.is_symlink() or self._is_model_written(path) for path in (card, metrics)
+        ):
+            return
+        if _run_card_manifest(directory).get("artifacts/metrics.csv") != _file_sha256(metrics):
+            return
+        recorded = dict(_summary_scalars(card))
+        shared = [(name, value) for name, value in _summary_scalars(metrics) if f"metrics.{name}" in recorded]
+        if not shared or any(
+            not math.isclose(value, recorded[f"metrics.{name}"], rel_tol=1e-9, abs_tol=1e-12)
+            for name, value in shared
+        ):
+            return
+        scope = _artifact_ref(directory, self.run_dir.resolve())
+        self._record_metrics_file(metrics, call_id)
+        self._backtest_scopes[call_id] = scope
+        self._scope_latest[scope] = call_id
+        self._record_backtest_outputs(directory, call_id, scope, verify_tables=True)
 
     def _note_model_write(
         self, tool_name: str, arguments: Mapping[str, Any], payload: dict[str, Any] | None
@@ -1029,7 +1159,7 @@ class _EvidenceMixin:
         symbol_index = next(
             (index for index, name in enumerate(folded) if name in _TABLE_SYMBOL_COLUMNS), None
         )
-        artifact = _relative_posix(path, self.run_dir.resolve())
+        artifact = _artifact_ref(path, self.run_dir.resolve())
         room = _MAX_GENERIC_EVIDENCE
         for row in data_rows:
             timestamp = (
@@ -1234,7 +1364,12 @@ class _EvidenceMixin:
         unit = unit.strip().upper() if isinstance(unit, str) else None
         metric_currency = {"RMB": "CNY", "CNH": "CNY"}.get(unit, unit) if unit in _CURRENCY_CODES else None
 
-        def visit(value: Any, path: str, timestamp: str | None = None) -> None:
+        def visit(
+            value: Any,
+            path: str,
+            timestamp: str | None = None,
+            declared_currency: str | None = None,
+        ) -> None:
             nonlocal remaining
             if remaining <= 0:
                 return
@@ -1254,7 +1389,12 @@ class _EvidenceMixin:
                             if tool_name == "get_sec_filings"
                             and path.startswith("data.metric.points[")
                             and path.endswith("].val")
-                            else _infer_currency(symbol or "")
+                            else (
+                                declared_currency
+                                if declared_currency
+                                and _leaf_name(path) in _AMOUNT_FIELDS
+                                else _infer_currency(symbol or "")
+                            )
                         ),
                         venue=_infer_venue(symbol or ""),
                     )
@@ -1262,6 +1402,13 @@ class _EvidenceMixin:
                 remaining -= 1
                 return
             if isinstance(value, dict):
+                # An object that names its own ISO currency ("currency": "USD")
+                # denominates the amount leaves beside it; nothing else inherits it.
+                sibling = value.get("currency")
+                sibling = sibling.strip().upper() if isinstance(sibling, str) else None
+                local_currency = (
+                    {"RMB": "CNY", "CNH": "CNY"}.get(sibling, sibling) if sibling in _CURRENCY_CODES else None
+                )
                 local_timestamp = next(
                     (
                         str(value[key])
@@ -1279,10 +1426,11 @@ class _EvidenceMixin:
                         item,
                         f"{path}.{key}" if path else str(key),
                         local_timestamp,
+                        local_currency,
                     )
             elif isinstance(value, list):
                 for index, item in enumerate(value):
-                    visit(item, f"{path}[{index}]", timestamp)
+                    visit(item, f"{path}[{index}]", timestamp, declared_currency)
 
         visit(payload, "")
 
@@ -1390,3 +1538,96 @@ class _EvidenceMixin:
                 continue
             records.append(replace(record, field=field_name))
         return records
+
+    def _ingest_document_text(
+        self,
+        arguments: Mapping[str, Any],
+        payload: dict[str, Any],
+        call_id: str,
+        *,
+        tool_name: str = "read_document",
+    ) -> None:
+        """Record the figures a document states as observed evidence.
+
+        ``read_document`` answers with one prose blob, so the numeric-leaf
+        flattening every other tool goes through found nothing: a PDF's figures
+        never became evidence and the gate redacted each of them as unsourced.
+
+        Only numbers carrying a mark of measurement count. A page number, a
+        section heading or a year in running text is not a finding, and
+        admitting bare integers would let an invented small figure match by
+        chance. The document must not be one this run wrote — reading back its
+        own draft is not observation — and nothing under the run directory is
+        read as a document, so the ledger's own artifacts cannot launder
+        themselves through the reader.
+
+        Args:
+            arguments: The reader's arguments; its ``file_path`` names the source.
+            payload: The document reader's envelope.
+            call_id: The reader call that showed this text to the model.
+            tool_name: The reader that returned the text.
+        """
+        text = next(
+            (
+                payload[key]
+                for key in ("text", "content", "markdown")
+                if isinstance(payload.get(key), str)
+            ),
+            None,
+        )
+        if not text:
+            return
+        path: Path | None = None
+        raw_path = arguments.get("file_path")
+        if isinstance(raw_path, str) and raw_path.strip():
+            try:
+                path = Path(raw_path).resolve()
+            except OSError:
+                path = None
+            if path is not None:
+                if self._is_model_written(path):
+                    return
+                try:
+                    path.relative_to(self.run_dir.resolve())
+                except ValueError:
+                    pass
+                else:
+                    return
+        artifact = path.name if path is not None else None
+        if artifact is None and isinstance(payload.get("file"), str):
+            artifact = payload["file"]
+        room = min(
+            _MAX_DOCUMENT_FIGURES,
+            _MAX_GENERIC_EVIDENCE - len(self._evidence),
+        )
+        if room <= 0:
+            return
+        seen: set[tuple[float, bool, str | None]] = set()
+        text = _document_percent_cells(text)
+        for figure in scan_figures(text, parse_figures_block(text)):
+            if room <= 0:
+                return
+            if figure.shape != "measured":
+                continue
+            value = float(figure.value) * float(figure.scale or 1.0)
+            if not math.isfinite(value):
+                continue
+            key = (round(value, 6), bool(figure.percent), figure.currency_code)
+            if key in seen:
+                continue
+            seen.add(key)
+            self._evidence.append(
+                EvidenceRecord(
+                    call_id=call_id,
+                    tool=tool_name,
+                    symbol=None,
+                    source="document",
+                    timestamp=None,
+                    field=_document_field(figure),
+                    value=value,
+                    status="observed",
+                    currency=figure.currency_code,
+                    artifact=artifact,
+                )
+            )
+            room -= 1

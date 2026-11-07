@@ -66,7 +66,7 @@ def compute(panel):
     vw = vwap(panel, "equity_cn")
 
     a = safe_div(rank(safe_div(pd.DataFrame(1.0, index=c.index, columns=c.columns), c)) * v, ts_mean(v, 20))
-    b = safe_div(h * rank(h - c), c.rolling(5).sum() / 5.0)
+    b = safe_div(h * rank(h - c), h.rolling(5).sum() / 5.0)
     d = rank(vw - vw.shift(5))
     out = a * b - d
     return out

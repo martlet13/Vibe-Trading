@@ -35,7 +35,8 @@ class SignalEngine:
     For each code we pick the first rule whose market matches, then check
     per-bar entry conditions: hour window, plus optionally RSI range and
     prior-return range (read from the rule dict — absent keys skip the
-    check). When all conditions pass we enter a position and hold for the
+    check). Entry bounds are inclusive and each side (``min``, ``max``) is
+    optional. When all conditions pass we enter a position and hold for the
     rule's holding days. Non-matching codes yield a zero series.
     """
 
@@ -118,14 +119,22 @@ class SignalEngine:
                 if bar_hour < hour_min or bar_hour > hour_max:
                     continue
 
-            if rsi_min is not None and rsi_max is not None:
+            if rsi_min is not None or rsi_max is not None:
                 rsi_val = rsi.iloc[i]
-                if pd.isna(rsi_val) or rsi_val < rsi_min or rsi_val > rsi_max:
+                if pd.isna(rsi_val):
+                    continue
+                if rsi_min is not None and rsi_val < rsi_min:
+                    continue
+                if rsi_max is not None and rsi_val > rsi_max:
                     continue
 
-            if ret_min is not None and ret_max is not None:
+            if ret_min is not None or ret_max is not None:
                 ret_val = prior_ret.iloc[i]
-                if pd.isna(ret_val) or ret_val < ret_min or ret_val > ret_max:
+                if pd.isna(ret_val):
+                    continue
+                if ret_min is not None and ret_val < ret_min:
+                    continue
+                if ret_max is not None and ret_val > ret_max:
                     continue
 
             values[i] = weight

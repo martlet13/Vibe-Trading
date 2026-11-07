@@ -29,6 +29,7 @@ from src.factors.base import (
     ts_min,
     ts_rank,
     ts_std,
+    vwap,
 )
 
 __alpha_meta__ = {
@@ -48,7 +49,7 @@ __alpha_meta__ = {
 def compute(panel: dict) -> pd.DataFrame:
     c = panel["close"]
     v = panel["volume"]
-    vw = safe_div(panel["amount"], v * 100.0 + 1.0)
+    vw = vwap(panel, "equity_cn")
     term1 = ts_mean(c, 7) - c
     term2 = ts_corr(vw, c.shift(5), 30)
     return term1 + term2

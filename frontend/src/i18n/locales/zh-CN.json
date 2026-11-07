@@ -1,6 +1,21 @@
 {
+  "gildata": {
+    "partner": "数据合作方 · 恒生聚源",
+    "website": "MCP 服务与个人注册",
+    "features": "聚源可选功能",
+    "optInHelp": "九项功能默认全部关闭。即使升级前已保存 Token，也要逐项手动开启。开启行情后，只有明确指定聚源才会使用；免费源查不到时不会自动转用聚源。",
+    "fund_nav": "场外基金净值",
+    "macro_series": "中国宏观指标",
+    "announcements": "公司和基金公告",
+    "broker_reports": "券商研报",
+    "market_quotes": "聚源行情（仅在指定聚源时使用）",
+    "fin_query": "综合问数",
+    "stock_selection": "智能选股",
+    "symbol_search": "证券搜索时查询聚源候选",
+    "shannon": "持仓诊断（香农）"
+  },
   "app": {
-    "version": "v0.1.18"
+    "version": "v0.1.19"
   },
   "navigation": {
     "menu": "浏览功能",
@@ -23,7 +38,8 @@
       "runtime": "查看券商连接和交易运行状态。",
       "settings": "配置模型、数据源和券商连接。",
       "pixelOffice": "规划和分配研究任务。分配任务不会启动执行；职级只是标签，不授予交易权限。",
-      "paperTrading": "使用模拟资金测试每日交易，不向券商发送订单。结果不含现金分红，不代表总回报。"
+      "paperTrading": "使用模拟资金测试每日交易，不向券商发送订单。结果不含现金分红，不代表总回报。",
+      "researchArtifacts": "跨会话保存并复用有证据支持的分析。"
     },
     "instructions": {
       "reports": "先在研究助手中描述策略并完成回测，再到这里打开结果。聊天生成的 PDF 等文档在原对话中下载。",
@@ -35,7 +51,8 @@
       "runtime": "先在设置或持仓页配置券商连接。可用的交易操作取决于该券商的能力和你的授权。",
       "settings": "初次使用先配置模型。按任务需要添加数据源或券商连接；研究公开行情无需连接券商账户。",
       "pixelOffice": "规划和分配研究任务。分配任务不会启动执行；职级只是标签，不授予交易权限。",
-      "paperTrading": "仅结算已完成的日线。策略只读取此前数据，在执行日收盘价成交。请等正常收市后 30 分钟；不会自动安排后台执行。"
+      "paperTrading": "仅结算已完成的日线。策略只读取此前数据，在执行日收盘价成交。请等正常收市后 30 分钟；不会自动安排后台执行。",
+      "researchArtifacts": "搜索历史分析，展开任意修订，或添加新证据创建关联修订。旧结论保持不变。"
     }
   },
   "layout": {
@@ -67,7 +84,41 @@
     "about": "关于",
     "sessionsLoadFailed": "无法加载会话。",
     "pixelOffice": "像素办公室",
-    "paperTrading": "模拟交易"
+    "paperTrading": "模拟交易",
+    "researchArtifacts": "研究资料"
+  },
+  "researchArtifacts": {
+    "subject": "研究主题",
+    "dataAsOf": "数据截至",
+    "saving": "正在保存…",
+    "saveError": "无法保存研究资料。",
+    "evidenceMissing": "未附证据引用",
+    "createdNotice": "已创建修订 {{id}}。",
+    "emptyHint": "保存一份分析，在以后的会话中复用其中的结论和证据。",
+    "emptyTitle": "还没有研究资料",
+    "save": "保存研究",
+    "universe": "研究范围（可选）",
+    "loadError": "无法加载研究资料。",
+    "formTitleNew": "保存研究",
+    "verification": "验证状态",
+    "additionalEvidence": "新增证据 URI（每行一个）",
+    "revise": "基于此修订继续修订",
+    "completeness": "完整程度",
+    "searchPlaceholder": "搜索主题、范围或正文",
+    "newResearch": "新建研究",
+    "formTitleRevision": "创建关联修订",
+    "content": "研究正文",
+    "subtitle": "跨会话保存并复用有证据支持的分析，不覆盖历史修订。",
+    "history": "修订历史",
+    "optionalLinks": "可选关联 ID",
+    "title": "研究资料",
+    "close": "关闭",
+    "idempotentNotice": "相同内容和来源信息已存在于 {{id}}。",
+    "evidence": "证据引用",
+    "hypothesis_id": "假设 ID",
+    "goal_id": "目标 ID",
+    "session_id": "会话 ID",
+    "run_id": "运行 ID"
   },
   "runtime": {
     "monitorBadge": "交易监控",
@@ -405,6 +456,7 @@
     "taskSubtitle": "问一只股票、一个策略，或者你的持仓——我会自己取数据、跑计算，并把每一步摆给你看。",
     "quickActions": "快捷操作",
     "browseAllExamples": "浏览全部示例",
+    "featured": "精选示例",
     "greetings": {
       "morning1": "早上好。",
       "morning2": "早上好，随时可以开始。",
@@ -465,6 +517,9 @@
     "reasoningEffortHigh": "高",
     "reasoningEffortXhigh": "超高",
     "reasoningEffortMax": "最大",
+    "reasoningEffortMinimal": "最低",
+    "reasoningEffortUltra": "极高",
+    "reasoningEffortPersistent": "持续",
     "reasoningEffortDesc": "控制支持该功能的模型所使用的推理深度。强度越高，复杂分析可能更充分，但耗时也可能更长；不支持的提供商可能会忽略此设置。选择「无（显式）」会显式发送该字段并关闭推理——部分 OpenAI 模型需要这样才能调用工具。",
     "reasoningEffortReset": "所选模型不支持 {{level}}，已改回提供商默认。",
     "localApiAccess": "本地 API 访问",
@@ -1112,29 +1167,6 @@
     "apiKey": "API 密钥",
     "tushareTokenDesc": "用于中国 A 股、期货、基金和宏观数据。没填的话会自动改用 AKShare 的免费数据。",
     "gildataTokenDesc": "可选的海量数据：A 股复权日线、港股及指数原始行情、场外基金净值，以及中国宏观、公告和研报工具。"
-  },
-  "qveris": {
-    "title": "QVeris 工具市场",
-    "subtitle": "默认继续使用免费公开数据；需要专业付费数据时再启用 QVeris。",
-    "enabled": "启用 QVeris 付费通道",
-    "baseUrl": "基础 URL",
-    "apiKey": "API 密钥",
-    "apiKeyPlaceholder": "留空以保留当前密钥",
-    "mode": "模式",
-    "modeFree": "仅使用免费公开数据",
-    "modePaid": "启用 QVeris 付费",
-    "budget": "每会话预算 Credits",
-    "budgetHint": "达到本会话预算后将停止付费执行。",
-    "balance": "剩余 Credits",
-    "recentUsage": "近期用量",
-    "noUsage": "暂无近期用量",
-    "signupCta": "打开注册",
-    "signupHint": "创建 QVeris 账户时使用此邀请码。",
-    "inviteCode": "邀请码",
-    "save": "保存 QVeris 设置",
-    "saved": "QVeris 设置已保存",
-    "testFailed": "QVeris 请求失败",
-    "notConfigured": "未配置"
   },
   "agent": {
     "reasoningStrength": "推理强度",
@@ -2052,9 +2084,6 @@
     "pattern": "识别图表形态",
     "portfolio_risk_xray": "透视组合风险",
     "propose_mandate_profiles": "推荐交易授权",
-    "qveris_execute": "执行QVeris操作",
-    "qveris_inspect": "检查QVeris操作",
-    "qveris_search": "搜索QVeris",
     "read_document": "读取文档",
     "read_file": "读取文件",
     "read_url": "读取网页",
@@ -2206,6 +2235,15 @@
       "failed": "读取失败 — 未计入合计",
       "lastSuccess": "上一次成功读取于 {{time}}",
       "noSuccess": "尚未成功读取过",
+      "cashDetails": "现金与融资",
+      "reportingCurrency": "报告币种",
+      "financingLimit": "融资额度",
+      "financingRemaining": "剩余融资额度",
+      "cashAvailable": "可用现金",
+      "cashWithdrawable": "可提取现金",
+      "cashFrozen": "冻结现金",
+      "cashSettling": "待结算现金",
+      "binanceRestrictedLocation": "Binance 返回 HTTP 451，当前网络出口地区受限，暂时无法读取。请确认所在地区可使用 Binance，并检查账户对应的官方 API 入口。",
       "reconnect": "重新连接",
       "retryRead": "重试读取"
     },
@@ -2312,6 +2350,7 @@
       "testFailed": "{{label}} 测试失败：{{error}}",
       "unknownTestError": "连接器返回了未知错误。",
       "delete": "删除",
+      "deleteInUse": "请先从账户持仓中移除此连接并保存，再删除连接。",
       "configured": "所需凭证已配置",
       "accountTitle": "账户",
       "accountCurrent": "读取尾号 ····{{last4}} 的账户",
@@ -2324,7 +2363,9 @@
       "accountDefault": " · 券商默认",
       "accountDeactivated": " · 已停用",
       "accountSave": "使用这个账户",
-      "accountSaved": "账户已保存。"
+      "accountSaved": "账户已保存。",
+      "host": "主机",
+      "port": "端口"
     },
     "imports": {
       "title": "导入 extraETF Investments",
@@ -2349,7 +2390,8 @@
       "current": "当前金额",
       "targetValue": "目标金额",
       "change": "调整金额"
-    }
+    },
+    "quoteAsOf": "报价时间：{{time}}"
   },
   "analysis": {
     "updated": "已更新",
@@ -2534,5 +2576,65 @@
     "us": "美股 · USD",
     "hk": "港股 · HKD",
     "cn_a": "A 股 · CNY"
+  },
+  "shannon": {
+    "regionLabel": "香农持仓诊断",
+    "title": "持仓风格与风险",
+    "intro": "基于聚源 MCP 香农服务，查看组合的风格倾向、个股特征，以及组合波动集中在哪些持仓。",
+    "notConfigured": "配置聚源 Token 后可使用持仓诊断，原有相关性分析仍可正常使用。",
+    "holdingsLabel": "你的A股持仓",
+    "holdingsHint": "每行一只，填写代码和权重。权重全部留空时按等权估算；自定义权重须全部填写且合计100%。仅支持A股股票，不自动剔除现金或其他资产。",
+    "holdingsInvalid": "请检查代码、重复股票和权重；按上方格式填写。",
+    "dateLabel": "分析截至日期（可选）",
+    "dateHint": "用这一天的数据分析当前输入的持仓，不代表你当时实际持有。",
+    "dateLatestHint": "留空使用最新可用数据",
+    "publishedThrough": "数据更新至 {{date}}",
+    "useLatest": "使用最新数据",
+    "analyze": "诊断持仓",
+    "analyzing": "正在分析持仓…",
+    "retry": "重新检查",
+    "serviceUnavailable": "服务暂不可用，请重试。",
+    "analysisDate": "实际分析日 {{date}}",
+    "included": "已纳入 {{included}}/{{requested}} 只股票",
+    "equalWeight": "等权估算",
+    "enteredWeights": "按输入权重分析",
+    "riskDate": "风险估计日 {{date}}",
+    "dateFallback": "请求日期 {{requested}}；实际使用可用数据日 {{actual}}。",
+    "partial": "部分股票未被纳入。下方模型结果只代表已覆盖部分，不能当作完整组合画像。",
+    "coveredWeight": "已覆盖输入权重 {{weight}}。",
+    "sourceLimitations": "数据源提示本次分析存在限制，结果仅供参考。",
+    "styleTitle": "组合风格暴露",
+    "styleAxis": "偏低 ← 模型参照0 → 偏高",
+    "styleNote": "红色偏高、绿色偏低，距离中线越远倾向越明显。数值为标准化特征，不是仓位或涨跌预测；市场贝塔也不是原始回归β。缺失或覆盖不足显示为—。",
+    "viewStockStyles": "查看个股风格",
+    "heatmapTitle": "个股风格暴露热力图",
+    "heatmapNote": "每行一只股票，每列一个因子，顺序与上图一致。红色偏高、绿色偏低；颜色在±2处饱和，数值不截断。它展示个股特点，不是该股风险贡献的分解。",
+    "missingData": "数据缺失",
+    "noStockStyle": "本次没有可用的个股风格数据。",
+    "riskTitle": "风险归因：谁在影响组合波动",
+    "mainContributor": "{{name}}在已返回股票中对组合波动的估计贡献最大。",
+    "riskNote": "用于定位组合波动集中在哪里，优先复核相关仓位。仓位是资金占比；组合波动贡献占比＝个股波动贡献÷组合总波动。条形按本图最大贡献缩放。",
+    "diversifying": "分散波动",
+    "addingVolatility": "推高波动",
+    "zeroContribution": "贡献为零",
+    "riskFootnote": "展示贡献最大的前5只股票。占比不是亏损概率，也不等于减仓后的风险降幅；可为负或超过100%，前5项不一定合计100%。负贡献表示分散作用。个股自身风险采用统一波动率假设。",
+    "noData": "本次没有可用数据，不以零代替。",
+    "colStock": "股票",
+    "colAllocation": "仓位",
+    "colContribution": "波动贡献",
+    "colShare": "组合波动\n贡献占比",
+    "colShareLabel": "组合波动贡献占比",
+    "factors": {
+      "BETA": "市场贝塔",
+      "VALUE": "价值",
+      "GROWTH": "成长",
+      "QUALITY": "质量",
+      "MOMENTUM_12M": "动量12月",
+      "MOMENTUM_6M": "动量6月",
+      "VOLATILITY": "波动率",
+      "LIQUIDITY": "流动性",
+      "SIZE": "市值",
+      "LEVERAGE": "杠杆"
+    }
   }
 }

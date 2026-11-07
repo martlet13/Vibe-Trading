@@ -410,6 +410,28 @@ def test_reaper_reaps_silent_run_and_writes_task_errors(tmp_path):
     assert sum(1 for e in store.read_events(run.id) if e.type == "run_reaped") == 1
 
 
+def test_reaper_uses_recent_event_with_unicode_line_separators(tmp_path):
+    store = SwarmStore(base_dir=tmp_path)
+    now = datetime.now(timezone.utc)
+    run = _base_run("r-unicode-heartbeat", timeout=60, retries=0)
+    run.created_at = _iso(now - timedelta(hours=2))
+    run.status = RunStatus.running
+    store.create_run(run)
+    TaskStore(store.run_dir(run.id)).save_task(run.tasks[0].model_copy(update={"status": TaskStatus.in_progress}))
+    store.append_event(
+        run.id,
+        SwarmEvent(
+            type="task_heartbeat",
+            data={"note": "before\u2028after\u2029end"},
+            timestamp=_iso(now),
+        ),
+    )
+
+    assert store.reap_stale_running_runs() == []
+    assert store.load_run(run.id).status == RunStatus.running
+    assert store.read_events(run.id)[0].data["note"] == "before\u2028after\u2029end"
+
+
 def test_reaper_leaves_terminal_tasks_alone(tmp_path):
     """If some tasks already completed before the host died, do not overwrite
     them — only the still-in-flight ones should turn failed."""
@@ -534,15 +556,28 @@ def test_swarm_tool_format_result_preserves_running_status_on_budget_out():
 
 
 def test_swarm_tool_no_longer_cancels_on_budget_out():
-    """Source-level guard: the SwarmTool wait loop must not call cancel_run
-    when its budget elapses — that used to throw away in-flight LLM work."""
+    """Source-level guard: the budget-exhaustion branch of the SwarmTool wait
+    loop must not call cancel_run — that used to throw away in-flight LLM work.
+
+    Cancelling the run is allowed only when the *user* stops it, so the guard now
+    covers the tail of ``execute`` (everything after the budget note) instead of
+    the whole method.
+    """
     import inspect
     import src.tools.swarm_tool as swarm_tool
 
     source = inspect.getsource(swarm_tool.SwarmTool.execute)
-    assert "cancel_run" not in source, (
+    marker = "# Wait budget elapsed"
+    assert marker in source, "budget-exhaustion branch marker is gone"
+    tail = source[source.index(marker) :]
+    assert "cancel_run" not in tail, (
         "SwarmTool.execute must not cancel the run on budget exhaustion; "
         "return partial state and let the agent decide."
+    )
+    # The only legitimate trigger is the session cancel flag shared with AgentLoop.
+    assert "_cancel_event" in source, (
+        "SwarmTool.execute must watch the session cancel flag so a user stop "
+        "reaches the run."
     )
 
 

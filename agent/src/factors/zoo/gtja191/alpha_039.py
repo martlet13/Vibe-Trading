@@ -29,6 +29,7 @@ from src.factors.base import (
     ts_min,
     ts_rank,
     ts_std,
+    vwap,
 )
 
 __alpha_meta__ = {
@@ -49,7 +50,7 @@ def compute(panel: dict) -> pd.DataFrame:
     c = panel["close"]
     o = panel["open"]
     v = panel["volume"]
-    vw = safe_div(panel["amount"], v * 100.0 + 1.0)
+    vw = vwap(panel, "equity_cn")
     p1 = rank(decay_linear(delta(c, 2), 8))
     blend = vw * 0.3 + o * 0.7
     vmean = ts_mean(v, 30).rolling(10, min_periods=10).sum()

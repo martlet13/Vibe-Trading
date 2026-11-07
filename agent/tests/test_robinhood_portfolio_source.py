@@ -37,6 +37,20 @@ class _Broker:
             "get_portfolio": rh.portfolio(total_value="1500.00", cash="500.00"),
             "get_equity_positions": rh.positions([]),
         }
+        self.quotes_by_symbol: dict[str, str | dict] = {}
+        self.page_replies: dict[str, dict] = {}
+
+    def reply_for(self, remote_name: str, arguments: dict) -> dict:
+        cursor = arguments.get("cursor")
+        if cursor:
+            return self.page_replies[cursor]
+        if remote_name == "get_equity_quotes":
+            symbol = arguments["symbols"][0]
+            quoted = self.quotes_by_symbol.get(symbol)
+            if isinstance(quoted, dict):
+                return quoted  # a fully-built envelope the test arranged
+            return rh.quotes([rh.quote_result(rh.quote(symbol, last_trade_price=quoted or "0"))])
+        return self.replies[remote_name]
 
     def adapter_class(self):
         broker = self
@@ -48,7 +62,7 @@ class _Broker:
 
             def call_tool(self, remote_name, arguments):  # noqa: ANN001
                 broker.calls.append((remote_name, dict(arguments)))
-                return broker.replies[remote_name]
+                return broker.reply_for(remote_name, dict(arguments))
 
         return _Adapter
 
@@ -111,7 +125,7 @@ def test_an_empty_account_is_a_complete_snapshot_read_for_the_selected_account(t
     ]
 
 
-def test_positions_are_listed_unpriced_and_quotes_are_never_called(tmp_path, broker: _Broker) -> None:
+def test_positions_are_priced_through_get_equity_quotes(tmp_path, broker: _Broker) -> None:
     broker.replies["get_portfolio"] = rh.portfolio(total_value="2500.00", cash="500.00")
     broker.replies["get_equity_positions"] = rh.positions(
         [
@@ -119,19 +133,50 @@ def test_positions_are_listed_unpriced_and_quotes_are_never_called(tmp_path, bro
             rh.position("MSFT", "2", average_buy_price=None),
         ]
     )
+    broker.quotes_by_symbol = {"AAPL": "150.25", "MSFT": "400.10"}
 
     snapshot = _service(tmp_path).refresh()
 
     rows = {row["symbol"]: row for row in snapshot["positions"]}
     assert rows["AAPL"]["quantity"] == 4.0
     assert rows["AAPL"]["cost_price"] == 150.0
+    assert rows["AAPL"]["market_price"] == 150.25
+    assert rows["AAPL"]["priced"] is True
+    assert rows["AAPL"]["market_value_usd"] == 601.0
+    assert not rows["AAPL"].get("price_error")
     assert rows["MSFT"]["cost_price"] is None  # omitted while reconciling, never zero
-    assert all(row["market_price"] is None for row in rows.values())
-    assert all("quotes are not mapped" in row["price_error"] for row in rows.values())
+    assert rows["MSFT"]["market_price"] == 400.10
+    assert snapshot["accounts"][0]["status"] == "ok"
     assert snapshot["accounts"][0]["total_usd"] == 2500.0
-    assert snapshot["accounts"][0]["unpriced_or_other_usd"] == 2000.0
-    assert any("No price available" in warning for warning in snapshot["warnings"])
-    assert "get_equity_quotes" not in [name for name, _ in broker.calls]
+    # 2500 total - 500 cash - 4*150.25 - 2*400.10 priced
+    assert snapshot["accounts"][0]["unpriced_or_other_usd"] == 598.8
+    assert not any("No price available" in warning for warning in snapshot["warnings"])
+    assert snapshot["complete"] is True
+    assert ("get_equity_quotes", {"symbols": ["AAPL"]}) in broker.calls
+    assert ("get_equity_quotes", {"symbols": ["MSFT"]}) in broker.calls
+
+
+def test_a_quote_read_that_fails_to_map_leaves_the_row_unpriced_with_the_reason(
+    tmp_path, broker: _Broker
+) -> None:
+    broker.replies["get_equity_positions"] = rh.positions(
+        [
+            rh.position("AAPL", "4", average_buy_price="150.00"),
+            rh.position("MSFT", "2", average_buy_price=None),
+        ]
+    )
+    missing_state = rh.quote("MSFT")
+    del missing_state["state"]
+    broker.quotes_by_symbol = {"AAPL": "150.25", "MSFT": rh.quotes([rh.quote_result(missing_state)])}
+
+    snapshot = _service(tmp_path).refresh()
+
+    rows = {row["symbol"]: row for row in snapshot["positions"]}
+    assert rows["AAPL"]["priced"] is True
+    assert rows["MSFT"]["priced"] is False
+    assert rows["MSFT"]["market_price"] is None
+    assert "quote is missing state" in rows["MSFT"]["price_error"]
+    assert any("robinhood:MSFT" in warning for warning in snapshot["warnings"])
 
 
 @pytest.mark.parametrize("field", ["options_value", "crypto_value", "futures_value", "fixed_income_value"])
@@ -165,7 +210,6 @@ def test_an_unreported_non_equity_value_is_not_read_as_zero(tmp_path, broker: _B
 @pytest.mark.parametrize(
     ("reply", "message"),
     [
-        (rh.positions([rh.position("AAPL", "1")], next_page="cursor-2"), "more than one page"),
         (rh.positions(None), "no positions list"),
         (rh.positions([None]), "is not an object"),
     ],
@@ -179,6 +223,47 @@ def test_a_partial_or_null_position_read_is_an_error_not_an_empty_account(
 
     assert account["status"] == "error"
     assert message in account["error"]
+
+
+def test_positions_across_pages_become_one_whole_account(tmp_path, broker: _Broker) -> None:
+    broker.replies["get_equity_positions"] = rh.positions(
+        [rh.position("AAPL", "1")], next_page="cursor-2"
+    )
+    broker.page_replies["cursor-2"] = rh.positions([rh.position("MSFT", "2")], next_page="")
+    broker.quotes_by_symbol = {"AAPL": "150.25", "MSFT": "400.10"}
+
+    snapshot = _service(tmp_path).refresh()
+
+    account = snapshot["accounts"][0]
+    assert account["status"] == "ok"
+    assert account["total_usd"] == 1500.0
+    assert sorted(row["symbol"] for row in snapshot["positions"]) == ["AAPL", "MSFT"]
+    assert all(row["priced"] for row in snapshot["positions"])
+    assert snapshot["complete"] is True
+    assert broker.calls == [
+        ("get_portfolio", {"account_number": ACCOUNT}),
+        ("get_equity_positions", {"account_number": ACCOUNT}),
+        ("get_equity_positions", {"account_number": ACCOUNT, "cursor": "cursor-2"}),
+        ("get_equity_quotes", {"symbols": ["AAPL"]}),
+        ("get_equity_quotes", {"symbols": ["MSFT"]}),
+    ]
+
+
+def test_a_failed_second_page_errors_the_source_instead_of_showing_partial_holdings(
+    tmp_path, broker: _Broker
+) -> None:
+    broker.replies["get_equity_positions"] = rh.positions(
+        [rh.position("AAPL", "1")], next_page="cursor-2"
+    )  # no page_replies entry: the follow-up call fails
+
+    snapshot = _service(tmp_path).refresh()
+
+    account = snapshot["accounts"][0]
+    assert account["status"] == "error"
+    assert "next-page call failed" in account["error"]
+    assert snapshot["positions"] == []
+    assert account["total_usd"] is None
+    assert snapshot["complete"] is False
 
 
 def test_a_missing_total_value_is_an_error_not_a_zero_account(tmp_path, broker: _Broker) -> None:
@@ -281,3 +366,29 @@ def test_accounts_route_reports_an_unavailable_broker_as_503(tmp_path, monkeypat
 
     assert response.status_code == 503
     assert "token expired" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("case", ["wrong_symbol", "wrong_close_symbol", "never_traded", "inactive"])
+def test_quote_identity_and_listing_status_cannot_price_another_position(tmp_path, broker, case):
+    broker.replies["get_equity_positions"] = rh.positions([rh.position("AAPL", "4")])
+    quote = rh.quote("MSFT" if case == "wrong_symbol" else "AAPL", last_trade_price="0", bid_price="0", ask_price="0")
+    close = rh.settled_close("MSFT" if case == "wrong_close_symbol" else quote["symbol"], price="999")
+    if case == "never_traded":
+        quote["has_traded"] = False
+    if case == "inactive":
+        quote["state"] = "delisted"
+    broker.quotes_by_symbol["AAPL"] = rh.quotes([rh.quote_result(quote, close_row=close)])
+    row = _service(tmp_path).refresh()["positions"][0]
+    assert row["priced"] is False
+    assert row["market_price"] is None
+    assert row.get("price_error")
+
+
+def test_quote_uses_the_newer_extended_hours_trade_and_retains_its_time(tmp_path, broker):
+    broker.replies["get_equity_positions"] = rh.positions([rh.position("AAPL", "4")])
+    quote = rh.quote("AAPL", last_trade_price="100")
+    quote.update(last_non_reg_trade_price="120", venue_last_non_reg_trade_time="2026-10-12T21:00:00Z")
+    broker.quotes_by_symbol["AAPL"] = rh.quotes([rh.quote_result(quote)])
+    row = _service(tmp_path).refresh()["positions"][0]
+    assert row["market_price"] == 120
+    assert "2026-10-12T21:00:00Z" in row["pricing_basis"]
