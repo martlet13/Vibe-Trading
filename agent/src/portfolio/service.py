@@ -27,6 +27,8 @@ from src.portfolio.compatibility import (
 )
 from src.portfolio.fx import FxQuote, Rates, build_rates, from_usd
 from src.portfolio.normalization import (
+    CRYPTO_BROKERS,
+    SPOT_BALANCE_BROKERS,
     STABLECOINS,
     account_balance_details,
     account_cash_usd,
@@ -392,7 +394,7 @@ class PortfolioService:
                     rates,
                     priced_total,
                 )
-                if broker == "binance":
+                if broker in SPOT_BALANCE_BROKERS:
                     account_total = priced_total
                 cash_total = min(
                     account_total,
@@ -459,13 +461,13 @@ class PortfolioService:
             positions.extend(broker_positions)
 
         total_usd = sum((_decimal(row.get("total_usd")) for row in accounts), Decimal("0"))
-        # Binance derives its account total from priced positions. Other
+        # Spot-balance connectors derive their account total from priced positions. Other
         # connectors report an independent broker account total, so an
         # unpriced position there does not make the account total incomplete.
         complete = all(
             row["status"] == "ok"
             and not (
-                row.get("broker") == "binance"
+                row.get("broker") in SPOT_BALANCE_BROKERS
                 and int(row.get("unpriced_position_count") or 0) > 0
             )
             for row in accounts
@@ -1052,7 +1054,7 @@ class PortfolioService:
             if quantity == 0:
                 continue
             try:
-                if broker in {"binance", "okx"} and normalized["symbol"] in STABLECOINS:
+                if broker in CRYPTO_BROKERS and normalized["symbol"] in STABLECOINS:
                     normalized["market_price"] = 1.0
                     normalized["price_currency"] = "USD"
                     normalized["pricing_basis"] = "USDT/USD proxy"
@@ -1241,11 +1243,13 @@ class PortfolioService:
         incomplete_unpriced = [
             f"{row['broker']}:{row['symbol']}"
             for row in positions
-            if row.get("broker") == "binance" and not row.get("priced")
+            if row.get("broker") in SPOT_BALANCE_BROKERS and not row.get("priced")
         ]
         if incomplete_unpriced:
+            brokers = sorted({entry.split(":", 1)[0] for entry in incomplete_unpriced})
             warnings.append(
-                "Binance account totals are built from priced positions; these "
+                ", ".join(broker.capitalize() for broker in brokers)
+                + " account totals are built from priced positions; these "
                 "holdings are excluded, so this snapshot is incomplete: "
                 + ", ".join(incomplete_unpriced[:20])
             )
@@ -1260,7 +1264,7 @@ class PortfolioService:
                 "verification: " + ", ".join(experimental) + "."
             )
         crypto_proxies = sorted(
-            {str(row.get("broker")) for row in positions if row.get("broker") in {"binance", "okx"}}
+            {str(row.get("broker")) for row in positions if row.get("broker") in CRYPTO_BROKERS}
         )
         if crypto_proxies:
             warnings.append(", ".join(crypto_proxies) + " spot balances are valued with USDT treated as 1 USD.")

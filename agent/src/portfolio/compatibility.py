@@ -52,6 +52,12 @@ _CONNECTOR_COMPATIBILITY: dict[str, PortfolioCompatibility] = {
         "Dedicated Longbridge mapping and quote fallback.",
     ),
     "binance": PortfolioCompatibility("native", 1, "spot", "Dedicated spot and Simple Earn balance handling."),
+    "bybit": PortfolioCompatibility(
+        "experimental",
+        1,
+        "spot",
+        "Spot balances only; Earn, funding-account and derivatives holdings are not read.",
+    ),
     "alpaca": PortfolioCompatibility(
         "contract_tested",
         1,

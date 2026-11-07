@@ -10,9 +10,10 @@ have dedicated branches:
 * ``longbridge`` — the account is a per-currency ``balances`` list, and
   positions are market-suffixed symbols with a ``symbol_name``.
 
-Inside the generic path, ``binance`` and ``okx`` additionally classify holdings
-as crypto/stablecoin and quote against USDT. Futu uses its explicit
-average_cost, because its securities cost_price includes realized gains.
+Inside the generic path, the crypto connectors (``binance``, ``bybit``,
+``okx``) additionally classify holdings as crypto/stablecoin and quote against
+USDT. Futu uses its explicit average_cost, because its securities cost_price
+includes realized gains.
 Other connectors fall through unchanged when their field semantics match.
 """
 
@@ -26,6 +27,13 @@ from src.portfolio.fx import Rates, from_usd, to_usd
 from src.trading.types import TradingProfile
 
 STABLECOINS = frozenset({"USDT", "USDC", "FDUSD", "TUSD", "BUSD"})
+
+#: Connectors whose holdings are crypto spot balances quoted against USDT.
+CRYPTO_BROKERS = frozenset({"binance", "bybit", "okx"})
+#: Spot-only connectors that report no account total of their own: the total
+#: is the sum of the priced balances, so an unpriced balance leaves it
+#: incomplete.
+SPOT_BALANCE_BROKERS = frozenset({"binance", "bybit"})
 
 _TRANSPORT_AUTH = {
     "remote_mcp": ("OAuth", "automatic"),
@@ -103,7 +111,7 @@ def normalize_position(broker: str, row: dict[str, Any]) -> dict[str, Any]:
         }
 
     symbol = str(row.get("symbol") or row.get("code") or row.get("ticker") or "").upper()
-    source = str(row.get("source") or ("spot" if broker == "binance" else "account"))
+    source = str(row.get("source") or ("spot" if broker in SPOT_BALANCE_BROKERS else "account"))
     market = str(row.get("market") or row.get("exchange") or broker).upper()
     currency = str(row.get("currency") or "").upper()
     if not currency:
@@ -161,7 +169,7 @@ def normalize_position(broker: str, row: dict[str, Any]) -> dict[str, Any]:
         market_price = abs(_decimal(source_market_value) / quantity)
     sec_type = str(row.get("sec_type") or "").upper()
     declared_asset_type = str(row.get("asset_type") or "").strip().lower()
-    crypto = broker in {"binance", "okx"} or declared_asset_type in {
+    crypto = broker in CRYPTO_BROKERS or declared_asset_type in {
         "crypto",
         "stablecoin",
     }
@@ -171,7 +179,7 @@ def normalize_position(broker: str, row: dict[str, Any]) -> dict[str, Any]:
     return {
         "broker": broker,
         "symbol": symbol,
-        "quote_symbol": str(row.get("quote_symbol") or (f"{symbol}/USDT" if broker == "binance" else symbol)),
+        "quote_symbol": str(row.get("quote_symbol") or (f"{symbol}/USDT" if broker in SPOT_BALANCE_BROKERS else symbol)),
         "name": str(
             row.get("name")
             or row.get("symbol_name")

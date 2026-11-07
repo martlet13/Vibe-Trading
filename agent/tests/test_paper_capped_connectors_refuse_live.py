@@ -38,6 +38,7 @@ _LIVE_CAPABLE = frozenset(
     {
         "alpaca",
         "binance",
+        "bybit",
         "etoro",
         "futu",
         "okx",
