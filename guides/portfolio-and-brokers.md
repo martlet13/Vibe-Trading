@@ -84,10 +84,14 @@ use a broker sandbox or local simulation. See each profile's notes and the
 | `alpaca-live-trade` | alpaca | live | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place.requires_mandate` | mandate required |
 | `alpaca-paper-sdk` | alpaca | paper | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
 | `alpaca-paper-trade` | alpaca | paper | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place` | no mandate declared |
+| `binance-futures-live-trade` | binance | live | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place.requires_mandate` | mandate required |
+| `binance-futures-paper-trade` | binance | paper | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place` | no mandate declared |
 | `binance-live-sdk-readonly` | binance | live | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
 | `binance-live-trade` | binance | live | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place.requires_mandate` | mandate required |
 | `binance-paper-sdk` | binance | paper | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
 | `binance-paper-trade` | binance | paper | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place` | no mandate declared |
+| `bybit-futures-live-trade` | bybit | live | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place.requires_mandate` | mandate required |
+| `bybit-futures-paper-trade` | bybit | paper | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place` | no mandate declared |
 | `bybit-live-sdk-readonly` | bybit | live | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
 | `bybit-live-trade` | bybit | live | broker_sdk | write-enabled | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | `orders.place.requires_mandate` | mandate required |
 | `bybit-paper-sdk` | bybit | paper | broker_sdk | read-only | `account.read`, `history.read`, `orders.read`, `positions.read`, `quotes.read` | broker_sdk | none declared | disabled (read-only) |
@@ -293,6 +297,52 @@ no `<ASSET>/USDT` price makes the gate refuse new live orders until it is sold
 or priced. Order symbols are matched against holdings by spelling, so selling an
 existing coin is counted conservatively as new exposure. Portfolio support is
 experimental: Earn, funding-account and derivatives balances are not read.
+
+## 📈 USDT Perpetual Futures (Binance, Bybit)
+
+Four order-placing profiles trade USDT-margined perpetuals:
+`binance-futures-paper-trade` (futures testnet), `binance-futures-live-trade`,
+`bybit-futures-paper-trade` (Bybit testnet) and `bybit-futures-live-trade`.
+The live profiles go through the mandate and kill switch like any live order.
+Three rules are hard limits of the connector, on paper and live alike; no
+mandate or tool argument can widen them:
+
+| Rule | What the connector does |
+|------|-------------------------|
+| Leverage 1-5x | A whole multiple from 1 to 5 (default 1); anything else is refused before the exchange is called. |
+| Isolated margin only | The symbol is set to isolated at the requested leverage and both are read back before the order; if either does not read back, the order is refused. |
+| Stop-loss **and** take-profit | Every order that opens or adds to a position needs both, on the correct side of the entry (long: SL < entry < TP; short: TP < entry < SL). |
+
+Orders take `quantity` in base units (no `notional`). An order with
+`reduce_only: true` only shrinks a position and takes no stop-loss,
+take-profit or leverage.
+
+- **Bybit** attaches the stop-loss and take-profit to the opening order, so the
+  position and its protection are created together; limit entries are allowed.
+  On a unified trading account Bybit sets margin mode per account, so switching
+  to isolated applies account-wide, and Bybit refuses the switch while cross
+  positions are open (the order is then refused).
+- **Binance** cannot attach protection to an order. Its futures orders,
+  reduce-only closes included, are therefore market orders only, and an entry is
+  followed at once by a reduce-only stop-loss and take-profit for
+  the filled size. If either is refused, the connector cancels the other and
+  closes the entry at market; if that close also fails, the result says
+  `UNPROTECTED POSITION` and you must close it on Binance. The protective
+  orders sit in Binance's conditional book, which `trading_cancel_order` never
+  addresses. The futures testnet issues its own keys: put them in
+  `futures_api_key` / `futures_api_secret` in `binance.json` (or in a separate
+  connection) when the same file also holds spot testnet keys.
+
+For the live gate a perpetual is a margined position: its notional counts in
+full toward `max_total_exposure_usd` and `max_leverage` × funding, but the
+cash funding ceiling, which stops a spot buy from spending more than the
+account holds, does not apply to it. Two limits follow from the gate as it is:
+an order symbol is matched to an open position by spelling (`BTC-USDT` vs
+`BTC/USDT:USDT`), so a `reduce_only` close is counted conservatively as new
+exposure and can be refused under a tight exposure cap; and while the kill
+switch is tripped every live order is refused, closes included — the
+exchange-side stop-loss and take-profit stay in force, and a position can be
+closed on the exchange itself.
 
 ### Trading connectors: fastest path
 

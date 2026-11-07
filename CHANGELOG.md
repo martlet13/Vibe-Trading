@@ -7,6 +7,24 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **USDT perpetual futures on Binance and Bybit, protected on every order**.
+  `binance-futures-paper-trade` / `binance-futures-live-trade` and
+  `bybit-futures-paper-trade` / `bybit-futures-live-trade` trade USDT-margined
+  perpetuals through `trading_place_order`, which gains `stop_loss`,
+  `take_profit`, `leverage` and `reduce_only`. Three hard limits apply on paper
+  and live and cannot be widened by a mandate or an argument: leverage is a
+  whole 1-5x, margin is isolated (set and read back before the order), and
+  every order that opens or adds to a position needs a stop-loss and a
+  take-profit on the correct side of the entry. Bybit attaches both to the
+  opening order. Binance cannot, so its entries are market orders followed by
+  reduce-only protection, and an entry whose protection is refused is closed
+  at market; if that fails too the result reports an `UNPROTECTED POSITION`.
+  Only a profile can mark a connection as futures — a saved config file or a
+  tool override cannot. In the live gate a perpetual is margined: the cash
+  funding ceiling no longer blocks it, while `max_leverage` × funding and
+  `max_total_exposure_usd` still cap its full notional. Spot orders keep the
+  cash ceiling.
+
 - **Bybit spot connector**. Four `ccxt` profiles — `bybit-paper-sdk` and
   `bybit-live-sdk-readonly` (read-only), `bybit-paper-trade` (testnet orders)
   and `bybit-live-trade` (live orders behind the mandate and kill switch) —

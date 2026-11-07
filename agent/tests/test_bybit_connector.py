@@ -88,7 +88,7 @@ def _cfg(profile: str = "paper", **extra) -> bb.BybitConfig:
 
 
 def test_profiles_registered_with_expected_permissions() -> None:
-    by_id = {p.id: p for p in profiles.list_profiles() if p.connector == "bybit"}
+    by_id = {p.id: p for p in profiles.list_profiles() if p.connector == "bybit" and not p.config.get("futures")}
     assert set(by_id) == {"bybit-paper-sdk", "bybit-live-sdk-readonly", "bybit-paper-trade", "bybit-live-trade"}
     for pid in ("bybit-paper-sdk", "bybit-live-sdk-readonly"):
         assert by_id[pid].readonly is True
