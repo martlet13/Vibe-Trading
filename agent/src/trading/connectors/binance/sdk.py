@@ -351,9 +351,51 @@ def get_positions(config: BinanceConfig | None = None) -> dict[str, Any]:
         "paper_guard": "host_separated",
         "positions": rows,
     }
-    if earn_note:
-        result["note"] = earn_note
+    notes = [note for note in (earn_note, _attach_exposure_values(cfg, rows)) if note]
+    if notes:
+        result["note"] = " ".join(notes)
     return result
+
+
+#: USD stablecoins held as cash. Their balances carry no market exposure.
+_CASH_ASSETS = frozenset({"USDT", "USDC", "FDUSD", "TUSD", "BUSD", "USDP", "DAI"})
+
+
+def _attach_exposure_values(cfg: BinanceConfig, rows: list[dict[str, Any]]) -> str | None:
+    """Set ``value_usd`` on each spot row from one public ticker read.
+
+    ``value_usd`` is the exposure the live mandate gate sums. Spot balances
+    carry no market value of their own, so without it the gate cannot price a
+    single holding and refuses every live order on a funded account. A crypto
+    balance is valued at its ``<ASSET>/USDT`` last price; a stablecoin balance
+    is cash, not exposure, so it counts as zero. A balance with no USDT price
+    gets no ``value_usd``, which the gate reads as unpriceable and refuses the
+    order (fail-closed). Returns a note naming any gap.
+    """
+    to_price: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        asset = str(row.get("symbol") or "").upper()
+        if asset in _CASH_ASSETS:
+            row["value_usd"] = 0.0
+        elif asset:
+            to_price.setdefault(f"{asset}/USDT", []).append(row)
+    if not to_price:
+        return None
+    try:
+        tickers = _public_exchange(cfg).fetch_tickers(list(to_price))
+    except Exception as exc:  # noqa: BLE001 - balances stay usable; the gate fails closed on the gap
+        return f"USDT prices unavailable ({type(exc).__name__}); holdings are left unvalued."
+    unpriced = []
+    for pair, pair_rows in to_price.items():
+        last = _to_float(_obj_get(_obj_get(tickers, pair, {}), "last"))
+        if last is None or not math.isfinite(last) or last <= 0:
+            unpriced.append(pair.split("/", 1)[0])
+            continue
+        for row in pair_rows:
+            quantity = _to_float(row.get("quantity"))
+            if quantity is not None and math.isfinite(quantity):
+                row["value_usd"] = abs(quantity) * last
+    return f"No USDT price for: {', '.join(sorted(unpriced))}." if unpriced else None
 
 
 def get_open_orders(config: BinanceConfig | None = None, *, include_executions: bool = False) -> dict[str, Any]:

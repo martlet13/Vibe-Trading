@@ -1007,3 +1007,42 @@ def test_okx_order_result_rejects_failed_scode() -> None:
     assert failed["status"] == "error"
     ok = ox._order_result(cfg, {"code": "0", "data": [{"ordId": "O1", "sCode": "0"}]}, symbol="BTC-USDT", side="buy", order_type="market", time_in_force="day")
     assert ok["status"] == "ok" and ok["order_id"] == "O1"
+
+
+def test_binance_live_order_on_funded_account_passes_the_gate(monkeypatch) -> None:
+    """A funded spot account must not make every live Binance order unpriceable.
+
+    Binance spot rows are balances without a market value. Before they carried
+    ``value_usd`` the gate could not price any holding (USDT cash included) and
+    refused every live order with "current positions could not be read".
+    """
+    from src.trading.connectors.binance import sdk as binance_sdk
+
+    class FundedSpot:
+        created: list = []
+
+        def fetch_balance(self):
+            return {"USDT": {"free": 500, "used": 0, "total": 500}, "BTC": {"free": 0.001, "used": 0, "total": 0.001}}
+
+        def sapi_get_simple_earn_flexible_position(self, params):
+            return {"rows": []}
+
+        def fetch_tickers(self, symbols):
+            return {"BTC/USDT": {"last": 60000.0}}
+
+        def create_order(self, symbol, otype, side, amount, price, params):
+            FundedSpot.created.append((symbol, otype, side, amount, dict(params)))
+            return {"id": "B-1", "symbol": symbol, "side": side, "type": otype, "status": "closed"}
+
+    FundedSpot.created = []
+    monkeypatch.setattr(binance_sdk, "_exchange", lambda _cfg: FundedSpot())
+    monkeypatch.setattr(binance_sdk, "build_config", lambda *a, **k: binance_sdk.BinanceConfig(profile="live"))
+    _patch_gate(
+        monkeypatch,
+        mandate=_mandate(max_order=100.0, assets=(AssetClass.CRYPTO,), instruments=(InstrumentType.CRYPTO,)),
+    )
+
+    out = service.place_order("BTC-USDT", "binance-live-trade", side="buy", notional=50.0)
+
+    assert out["status"] == "ok", out
+    assert FundedSpot.created == [("BTC/USDT", "market", "buy", 50.0, {"quoteOrderQty": 50.0})]

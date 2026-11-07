@@ -7,6 +7,18 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+#### Live trading
+
+- **A live Binance order is no longer refused because the account holds
+  something**. Binance spot positions are balances with no market value, so
+  the mandate gate could not price a single holding — USDT cash included —
+  and refused every `binance-live-trade` order on a funded account with
+  "current positions could not be read". Each spot row now carries
+  `value_usd`: a crypto balance at its `<ASSET>/USDT` last price from one
+  public ticker read, a stablecoin balance as cash at zero exposure. A
+  holding with no USDT price is still left unvalued, so the gate keeps
+  refusing until it is sold or priced, and the read says which asset it is.
+
 #### Backtest runner, engines and metrics
 
 - **A benchmark is bought at the first evaluated open, the way the strategy
