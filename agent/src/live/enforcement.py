@@ -125,6 +125,11 @@ class OrderIntent:
             back to the instrument-type default (US-centric), preserving the
             single-market behavior. Carrying it explicitly is what lets the
             mandate gate distinguish e.g. an HK equity from a US equity.
+        margined: The order is a margined derivative (a perpetual future):
+            its notional is backed by posted margin, not paid in full, so the
+            cash funding ceiling does not apply. Gross exposure is still capped
+            by ``max_leverage`` × ``account_funding_usd``. Set by the trading
+            service from the profile, never from a tool argument.
     """
 
     symbol: str
@@ -136,6 +141,7 @@ class OrderIntent:
     # Buy-limit worst-case fill price for notional math (#18); None on market
     # orders and on connectors that do not pass one through.
     limit_price: float | None = None
+    margined: bool = False
 
 
 @dataclass(frozen=True)
@@ -625,8 +631,10 @@ def check_mandate(
         )
 
     # 8. Funding (defense-in-depth; broker is the real ceiling). Only a buy can
-    #    push us past funding — never block a sell on this.
-    if intent.side == "buy" and post_exposure > caps.account_funding_usd:
+    #    push us past funding — never block a sell on this. A margined
+    #    derivative's notional is not paid from funding; step 6 already caps it
+    #    at max_leverage × funding.
+    if intent.side == "buy" and not intent.margined and post_exposure > caps.account_funding_usd:
         return _breach(
             broker=broker, remote_tool=remote_tool, intent=intent,
             kind=BREACH_KIND_QUANTITATIVE, limit="account_funding_usd",

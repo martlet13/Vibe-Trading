@@ -1,7 +1,8 @@
 """Built-in Bybit connector profiles.
 
 Read-only paper (testnet) and live profiles plus order-placing paper and live
-profiles, all spot. Paper and live use different key pairs and different
+profiles for spot, and order-placing paper and live profiles for USDT
+perpetuals (``futures``). Paper and live use different key pairs and different
 hosts, so they are distinct profiles. The order-placing live profile carries an
 ``orders.place.requires_mandate`` capability — the higher trading layer must
 gate it behind the user's mandate before any order reaches the connector.
@@ -69,6 +70,39 @@ BYBIT_PROFILES: tuple[TradingProfile, ...] = (
             "placement must be gated by the user's mandate; the "
             "orders.place.requires_mandate capability signals that requirement upstream. "
             "Derivatives are not traded."
+        ),
+    ),
+    TradingProfile(
+        id="bybit-futures-paper-trade",
+        connector="bybit",
+        label="Bybit USDT Perpetuals Testnet · ccxt Trading",
+        environment="paper",
+        transport="broker_sdk",
+        capabilities=READ_CAPABILITIES + ("orders.place",),
+        readonly=False,
+        config={"profile": "paper", "futures": True},
+        notes=(
+            "Trades Bybit USDT perpetuals on the testnet (api-testnet.bybit.com). "
+            "USDT-margined perpetuals only, on isolated margin at 1-5x; every new "
+            "position carries a stop-loss and a take-profit or the order is refused."
+            " The stop-loss and take-profit are attached to the opening order itself."
+        ),
+    ),
+    TradingProfile(
+        id="bybit-futures-live-trade",
+        connector="bybit",
+        label="Bybit USDT Perpetuals Live · ccxt Trading",
+        environment="live",
+        transport="broker_sdk",
+        capabilities=READ_CAPABILITIES + ("orders.place.requires_mandate",),
+        readonly=False,
+        config={"profile": "live", "futures": True},
+        notes=(
+            "Trades Bybit USDT perpetuals on the live account (api.bybit.com) behind the "
+            "user's mandate and kill switch. USDT-margined perpetuals only, on isolated "
+            "margin at 1-5x; every new position carries a stop-loss and a take-profit or "
+            "the order is refused."
+            " The stop-loss and take-profit are attached to the opening order itself."
         ),
     ),
 )

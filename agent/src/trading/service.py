@@ -726,6 +726,10 @@ def place_order(
     limit_price: float | None = None,
     time_in_force: str = "day",
     session_id: str = "",
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
+    leverage: float | None = None,
+    reduce_only: bool = False,
     **overrides: Any,
 ) -> dict[str, Any]:
     """Place an order via a connector profile.
@@ -735,6 +739,11 @@ def place_order(
     fail-closed pre-trade checks + audit) before any order reaches the broker.
     Only ``broker_sdk`` connectors are supported here; Robinhood keeps its MCP
     gate and IBKR stays read-only.
+
+    ``stop_loss``, ``take_profit``, ``leverage`` and ``reduce_only`` are the
+    futures protection fields. They reach the connector only when set, so a
+    connector without futures support never receives them; a spot profile of
+    a connector that has futures refuses them.
     """
     profile = profile_by_id(profile_id)
     if profile.transport != "broker_sdk":
@@ -753,6 +762,10 @@ def place_order(
         "limit_price": limit_price,
         "time_in_force": time_in_force,
     }
+    futures_fields = {"stop_loss": stop_loss, "take_profit": take_profit, "leverage": leverage}
+    place_kwargs.update({key: value for key, value in futures_fields.items() if value is not None})
+    if reduce_only:
+        place_kwargs["reduce_only"] = reduce_only
 
     if profile.environment == "paper":
         return _with_profile(profile, module.place_order(config, **place_kwargs))
@@ -770,6 +783,7 @@ def place_order(
         instrument_type=instrument_type,
         asset_class=asset_class,
         limit_price=float(limit_price) if limit_price is not None else None,
+        margined=dict(profile.config).get("futures") is True,
     )
     result = execute_live_order(
         broker=profile.connector,

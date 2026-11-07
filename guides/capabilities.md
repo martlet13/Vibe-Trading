@@ -212,7 +212,7 @@ Connector-first profiles. Most do read + paper-account order placement — IBKR 
 | **mStock** | India (NSE/BSE) | Separate holdings/net-position reads; no portfolio aggregation or orders |
 | **Tiger** | US / HK / A | read + paper + bounded live |
 | **Alpaca** | US | read + paper + bounded live (+ TAP credential-isolation mode) |
-| **OKX** · **Binance** · **Bybit** | crypto | read + paper + bounded live (Bybit: spot only; testnet ⇔ paper host guard) |
+| **OKX** · **Binance** · **Bybit** | crypto | read + paper + bounded live; Binance and Bybit also USDT perpetuals (isolated margin, 1-5x, stop-loss and take-profit required on every position) |
 | **Futu** | HK / US / A | read + paper + bounded live |
 | **eToro** | global | read + paper + bounded live (Public API; demo keys reach only `/demo` paths, plus copy-trading workflows) |
 | **MetaTrader 5** | forex / CFD | read + paper + bounded live (Exness-style; demo ⇔ paper identity guard) |

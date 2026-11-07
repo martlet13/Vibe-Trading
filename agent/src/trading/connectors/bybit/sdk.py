@@ -1,10 +1,11 @@
-"""Bybit spot ccxt connector with host-separated paper and live profiles.
+"""Bybit ccxt connector with host-separated paper and live profiles.
 
-Every client is pinned to the spot category and checked against the host its
-profile declares: a paper profile must resolve every ccxt endpoint to
-``api-testnet.bybit.com`` and a live profile to ``api.<hostname>``. The check
-reads the client's own resolved URLs, so a sandbox flag that failed to apply
-fails closed instead of sending a testnet intent to the live host.
+Every client is pinned to one category (spot, or linear perpetuals for a
+futures profile) and checked against the host its profile declares: a paper
+profile must resolve every ccxt endpoint to ``api-testnet.bybit.com`` and a
+live profile to ``api.<hostname>``. The check reads the client's own resolved
+URLs, so a sandbox flag that failed to apply fails closed instead of sending a
+testnet intent to the live host.
 """
 
 from __future__ import annotations
@@ -70,6 +71,7 @@ class BybitConfig:
     hostname: str = DEFAULT_HOSTNAME
     timeout: float = 15.0
     readonly: bool = True
+    futures: bool = False
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any] | None = None) -> "BybitConfig":
@@ -92,6 +94,11 @@ class BybitConfig:
             raise BybitConfigError("timeout must be a positive number") from exc
         if not (math.isfinite(timeout) and timeout > 0):
             raise BybitConfigError("timeout must be a positive number")
+        futures = payload.get("futures", False)
+        if not isinstance(futures, bool):
+            raise BybitConfigError("futures must be true or false")
+        if futures and profile == "live-readonly":
+            raise BybitConfigError("futures trading is available only through the futures trade profiles")
         return cls(
             api_key=str(payload.get("api_key") or "").strip(),
             api_secret=str(payload.get("api_secret") or "").strip(),
@@ -99,6 +106,7 @@ class BybitConfig:
             hostname=hostname,
             timeout=timeout,
             readonly=bool(payload.get("readonly", True)),
+            futures=futures,
         )
 
     def with_overrides(
@@ -154,6 +162,9 @@ def build_config(
     for key, value in dict(profile_config or {}).items():
         if value is not None:
             base[key] = value
+    # Only the selected profile decides whether this is a futures connection; a
+    # saved file never turns a spot profile into a derivatives one.
+    base["futures"] = bool(dict(profile_config or {}).get("futures", False))
     cfg = BybitConfig.from_mapping(base)
     clean = {k: v for k, v in dict(overrides or {}).items() if k in _OVERRIDE_KEYS and v not in (None, "")}
     return cfg.with_overrides(**clean) if clean else cfg
@@ -260,6 +271,8 @@ def get_account_snapshot(config: BybitConfig | None = None) -> dict[str, Any]:
     """Fetch the non-zero spot balances (``free`` / ``used`` / ``total``)."""
     cfg = config or load_config()
     ex = _exchange(cfg)
+    if cfg.futures:
+        return _futures().get_account_snapshot(cfg, ex)
     balance = ex.fetch_balance()
     return {
         "status": "ok",
@@ -283,6 +296,8 @@ def get_positions(config: BybitConfig | None = None) -> dict[str, Any]:
     """
     cfg = config or load_config()
     ex = _exchange(cfg)
+    if cfg.futures:
+        return _futures().get_positions(cfg, ex)
     balance = ex.fetch_balance()
     rows = [
         {
@@ -342,6 +357,8 @@ def get_open_orders(config: BybitConfig | None = None, *, include_executions: bo
     """
     cfg = config or load_config()
     ex = _exchange(cfg)
+    if cfg.futures:
+        return _futures().get_open_orders(cfg, ex)
     symbol_required = _symbol_required_errors()
     result: dict[str, Any] = {
         "status": "ok",
@@ -369,6 +386,8 @@ def get_quote(symbol: str, *, config: BybitConfig | None = None, **_: Any) -> di
     """Fetch a latest spot ticker snapshot for ``symbol``."""
     cfg = config or load_config()
     ex = _public_exchange(cfg)
+    if cfg.futures:
+        return _futures().get_quote(cfg, ex, symbol)
     clean = normalize_symbol(symbol)
     ticker = ex.fetch_ticker(clean)
     return {
@@ -405,8 +424,10 @@ def get_historical_bars(
     """Fetch historical spot OHLCV bars for ``symbol``."""
     cfg = config or load_config()
     ex = _public_exchange(cfg)
-    clean = normalize_symbol(symbol)
     timeframe = _TIMEFRAME_MAP.get(period.strip(), "1d")
+    if cfg.futures:
+        return _futures().get_historical_bars(cfg, ex, symbol, timeframe, limit, period)
+    clean = normalize_symbol(symbol)
     bars = ex.fetch_ohlcv(clean, timeframe=timeframe, limit=int(limit))
     return {
         "status": "ok",
@@ -440,8 +461,17 @@ def place_order(
     order_type: str = "market",
     limit_price: float | None = None,
     time_in_force: str = "day",
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
+    leverage: float | None = None,
+    reduce_only: bool = False,
 ) -> dict[str, Any]:
     """Place a spot order on Bybit via ccxt's unified ``create_order``.
+
+    A futures profile routes to :func:`src.trading.connectors.bybit.futures.place_order`
+    instead, which takes ``stop_loss``, ``take_profit``, ``leverage`` and
+    ``reduce_only``; a spot profile refuses those arguments rather than drop
+    the protection a caller asked for.
 
     The connector executes the intent the caller has already authorized;
     mandate/limit enforcement lives in a higher layer. The client's resolved
@@ -481,6 +511,18 @@ def place_order(
         return {"status": "error", "error": "quantity must be a positive number."}
     if notional_given and not _positive_finite(notional_value):
         return {"status": "error", "error": "notional must be a positive number."}
+
+    if cfg.futures:
+        return _place_futures_order(
+            cfg, symbol=symbol, side=side_clean, quantity=qty_value, notional_given=notional_given,
+            order_type=type_clean, limit_price=limit_price, time_in_force=time_in_force,
+            stop_loss=stop_loss, take_profit=take_profit, leverage=leverage, reduce_only=reduce_only,
+        )
+    if stop_loss is not None or take_profit is not None or leverage is not None or reduce_only:
+        return {
+            "status": "error",
+            "error": "stop_loss, take_profit, leverage and reduce_only apply to futures profiles only.",
+        }
 
     params: dict[str, Any] = {}
     price: float | None = None
@@ -548,6 +590,13 @@ def cancel_order(
     if symbol is None or not str(symbol).strip():
         return {"status": "error", "error": "Bybit cancel requires symbol."}
 
+    if cfg.futures:
+        try:
+            ex = _exchange(cfg)
+        except BybitConfigError as exc:
+            return {"status": "error", "error": str(exc)}
+        return _futures().cancel_order(cfg, ex, order_id_clean, str(symbol))
+
     clean_symbol = normalize_symbol(symbol)
     if not clean_symbol or "/" not in clean_symbol:
         return {"status": "error", "error": f"could not resolve a valid trading pair from symbol '{symbol}'."}
@@ -570,9 +619,54 @@ def cancel_order(
     }
 
 
+def _place_futures_order(
+    cfg: BybitConfig,
+    *,
+    symbol: str,
+    side: str,
+    quantity: float | None,
+    notional_given: bool,
+    order_type: str,
+    limit_price: Any,
+    time_in_force: str,
+    stop_loss: Any,
+    take_profit: Any,
+    leverage: Any,
+    reduce_only: Any,
+) -> dict[str, Any]:
+    """Check size, price and policy, then route a futures order to the futures module."""
+    if notional_given:
+        return {"status": "error", "error": "futures orders take 'quantity' in base units, not 'notional'."}
+    price: float | None = None
+    tif: str | None = None
+    if order_type == "limit":
+        price = _to_float(limit_price)
+        if not _positive_finite(price):
+            return {"status": "error", "error": "limit orders require a positive 'limit_price'."}
+        tif = _TIME_IN_FORCE_MAP.get(str(time_in_force or "").strip().lower())
+        if tif is None:
+            return {"status": "error", "error": "time_in_force must be one of 'day', 'gtc', 'ioc', 'fok'."}
+    try:
+        ex = _exchange(cfg)
+    except BybitConfigError as exc:
+        return {"status": "error", "error": str(exc)}
+    return _futures().place_order(
+        cfg, ex, symbol=symbol, side=side, quantity=quantity, order_type=order_type,
+        limit_price=price, time_in_force=tif,
+        stop_loss=stop_loss, take_profit=take_profit, leverage=leverage, reduce_only=reduce_only,
+    )
+
+
 # ---------------------------------------------------------------------------
 # SDK plumbing
 # ---------------------------------------------------------------------------
+
+
+def _futures() -> ModuleType:
+    """Import the futures module lazily; it imports helpers from this one."""
+    from src.trading.connectors.bybit import futures
+
+    return futures
 
 
 def _require_ccxt() -> ModuleType:
@@ -615,8 +709,10 @@ def _exchange(cfg: BybitConfig):
         "timeout": int(cfg.timeout * 1000),
         "hostname": cfg.hostname,
         "options": {
-            # ccxt's Bybit default category is swap; this connector is spot only.
-            "defaultType": "spot",
+            # ccxt's Bybit default category is swap; spot profiles pin spot and
+            # futures profiles pin USDT-margined linear perpetuals.
+            "defaultType": "swap" if cfg.futures else "spot",
+            "defaultSubType": "linear",
             # Signed Bybit requests carry a timestamp checked against
             # recv_window; measure the exchange clock first so a drifting
             # system clock does not reject otherwise valid keys.

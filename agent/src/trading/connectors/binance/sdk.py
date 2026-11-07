@@ -48,6 +48,7 @@ PROFILE_ENVIRONMENTS = {
 DEFAULT_TESTNET_HOST = "https://testnet.binance.vision"
 LIVE_HOST = "https://api.binance.com"
 USDM_LIVE_HOST = "https://fapi.binance.com"
+FUTURES_TESTNET_HOST = "https://testnet.binancefuture.com"
 
 class BinanceDependencyError(RuntimeError):
     """Raised when the optional ``ccxt`` package is not installed."""
@@ -70,6 +71,9 @@ class BinanceConfig:
     testnet_host: str = DEFAULT_TESTNET_HOST
     timeout: float = 15.0
     readonly: bool = True
+    futures: bool = False
+    futures_api_key: str = ""
+    futures_api_secret: str = ""
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any] | None = None) -> "BinanceConfig":
@@ -85,6 +89,11 @@ class BinanceConfig:
             raise BinanceConfigError(
                 "market_type 'usdm' is available only through the live-readonly profile"
             )
+        futures = payload.get("futures", False)
+        if not isinstance(futures, bool):
+            raise BinanceConfigError("futures must be true or false")
+        if futures and (market_type != "spot" or profile == "live-readonly"):
+            raise BinanceConfigError("futures trading is available only through the futures trade profiles")
         raw_tolerance = payload.get("observation_absolute_tolerance")
         try:
             tolerance = float(
@@ -109,6 +118,9 @@ class BinanceConfig:
             testnet_host=str(payload.get("testnet_host") or DEFAULT_TESTNET_HOST).strip(),
             timeout=float(payload.get("timeout") or 15.0),
             readonly=bool(payload.get("readonly", True)),
+            futures=futures,
+            futures_api_key=str(payload.get("futures_api_key") or "").strip(),
+            futures_api_secret=str(payload.get("futures_api_secret") or "").strip(),
         )
 
     def with_overrides(
@@ -150,9 +162,21 @@ class BinanceConfig:
     @property
     def host(self) -> str:
         """Return the REST host this profile connects to."""
+        if self.futures:
+            return FUTURES_TESTNET_HOST if self.is_testnet else USDM_LIVE_HOST
         if self.market_type == "usdm":
             return USDM_LIVE_HOST
         return self.testnet_host if self.is_testnet else LIVE_HOST
+
+    def futures_credentials(self) -> tuple[str, str]:
+        """Return the futures key pair: the dedicated one when set, else the main one.
+
+        The Binance futures testnet issues its own keys, separate from the spot
+        testnet, so a config that serves both can hold both pairs.
+        """
+        if self.futures_api_key and self.futures_api_secret:
+            return self.futures_api_key, self.futures_api_secret
+        return self.api_key, self.api_secret
 
 
 _OVERRIDE_KEYS = (
@@ -173,6 +197,9 @@ def build_config(profile_config: Mapping[str, Any] | None = None, overrides: Map
     for key, value in dict(profile_config or {}).items():
         if value is not None:
             base[key] = value
+    # Only the selected profile decides whether this is a futures connection; a
+    # saved file never turns a spot profile into a derivatives one.
+    base["futures"] = bool(dict(profile_config or {}).get("futures", False))
     cfg = BinanceConfig.from_mapping(base)
     clean = {k: v for k, v in dict(overrides or {}).items() if k in _OVERRIDE_KEYS and v not in (None, "")}
     return cfg.with_overrides(**clean) if clean else cfg
@@ -276,6 +303,8 @@ def get_account_snapshot(config: BinanceConfig | None = None) -> dict[str, Any]:
     cfg = config or load_config()
     _assert_host(cfg)
     ex = _exchange(cfg)
+    if cfg.futures:
+        return _futures().get_account_snapshot(cfg, ex)
     if cfg.market_type == "usdm":
         return _get_usdm_observation(cfg, ex)
     balance = _read_with_clock_retry(ex, ex.fetch_balance)
@@ -303,6 +332,8 @@ def get_positions(config: BinanceConfig | None = None) -> dict[str, Any]:
     cfg = config or load_config()
     _assert_host(cfg)
     ex = _exchange(cfg)
+    if cfg.futures:
+        return _futures().get_positions(cfg, ex)
     if cfg.market_type == "usdm":
         return _get_usdm_observation(cfg, ex)
     balance = _read_with_clock_retry(ex, ex.fetch_balance)
@@ -411,6 +442,8 @@ def get_open_orders(config: BinanceConfig | None = None, *, include_executions: 
     _reject_unsupported_usdm_surface(cfg)
     _assert_host(cfg)
     ex = _exchange(cfg)
+    if cfg.futures:
+        return _futures().get_open_orders(cfg, ex)
     symbol_required = _symbol_required_errors()
     result: dict[str, Any] = {
         "status": "ok",
@@ -443,6 +476,8 @@ def get_quote(symbol: str, *, config: BinanceConfig | None = None, **_: Any) -> 
     _reject_unsupported_usdm_surface(cfg)
     _assert_host(cfg)
     ex = _public_exchange(cfg)
+    if cfg.futures:
+        return _futures().get_quote(cfg, ex, symbol)
     clean = normalize_symbol(symbol)
     ticker = ex.fetch_ticker(clean)
     return {
@@ -475,6 +510,8 @@ def search_instruments(
     """
     cfg = config or load_config()
     _reject_unsupported_usdm_surface(cfg)
+    if cfg.futures:
+        raise BinanceConfigError("instrument search covers the spot catalog; use a spot profile")
     _assert_host(cfg)
 
     requested = normalize_symbol(query)
@@ -540,8 +577,10 @@ def get_historical_bars(
     _reject_unsupported_usdm_surface(cfg)
     _assert_host(cfg)
     ex = _public_exchange(cfg)
-    clean = normalize_symbol(symbol)
     timeframe = _TIMEFRAME_MAP.get(period.strip(), "1d")
+    if cfg.futures:
+        return _futures().get_historical_bars(cfg, ex, symbol, timeframe, limit, period)
+    clean = normalize_symbol(symbol)
     bars = ex.fetch_ohlcv(clean, timeframe=timeframe, limit=int(limit))
     return {
         "status": "ok",
@@ -576,8 +615,17 @@ def place_order(
     order_type: str = "market",
     limit_price: float | None = None,
     time_in_force: str = "day",
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
+    leverage: float | None = None,
+    reduce_only: bool = False,
 ) -> dict[str, Any]:
     """Place a spot order on Binance via ccxt's unified ``create_order``.
+
+    A futures profile routes to :func:`src.trading.connectors.binance.futures.place_order`
+    instead, which takes ``stop_loss``, ``take_profit``, ``leverage`` and
+    ``reduce_only``; a spot profile refuses those arguments rather than drop
+    the protection a caller asked for.
 
     The configured profile's host (testnet vs live) is the authoritative
     paper/live discriminator and is asserted before anything is submitted, so a
@@ -614,6 +662,16 @@ def place_order(
         return {
             "status": "error",
             "error": "Binance USD-M Shadow Account is read-only",
+        }
+    if cfg.futures:
+        return _place_futures_order(
+            cfg, symbol=symbol, side=side, quantity=quantity, notional=notional, order_type=order_type,
+            stop_loss=stop_loss, take_profit=take_profit, leverage=leverage, reduce_only=reduce_only,
+        )
+    if stop_loss is not None or take_profit is not None or leverage is not None or reduce_only:
+        return {
+            "status": "error",
+            "error": "stop_loss, take_profit, leverage and reduce_only apply to futures profiles only.",
         }
 
     side_clean = str(side or "").strip().lower()
@@ -736,6 +794,13 @@ def cancel_order(
     except BinanceConfigError as exc:
         return {"status": "error", "error": str(exc)}
 
+    if cfg.futures:
+        try:
+            ex = _exchange(cfg)
+        except BinanceConfigError as exc:
+            return {"status": "error", "error": str(exc)}
+        return _futures().cancel_order(cfg, ex, order_id_clean, str(symbol))
+
     clean_symbol = normalize_symbol(symbol)
     if not clean_symbol or "/" not in clean_symbol:
         return {"status": "error", "error": f"could not resolve a valid trading pair from symbol '{symbol}'."}
@@ -758,9 +823,49 @@ def cancel_order(
     }
 
 
+def _place_futures_order(
+    cfg: BinanceConfig,
+    *,
+    symbol: str,
+    side: str,
+    quantity: float | None,
+    notional: float | None,
+    order_type: str,
+    stop_loss: Any,
+    take_profit: Any,
+    leverage: Any,
+    reduce_only: Any,
+) -> dict[str, Any]:
+    """Check the size and route a futures order to the futures module."""
+    type_clean = str(order_type or "").strip().lower()
+    if type_clean not in ("market", "limit"):
+        return {"status": "error", "error": "order_type must be 'market' or 'limit'."}
+    if notional is not None:
+        return {"status": "error", "error": "futures orders take 'quantity' in base units, not 'notional'."}
+    qty_value = _to_float(quantity)
+    if qty_value is None or not math.isfinite(qty_value) or qty_value <= 0:
+        return {"status": "error", "error": "quantity must be a positive number."}
+    try:
+        _assert_host(cfg)
+        ex = _exchange(cfg)
+    except BinanceConfigError as exc:
+        return {"status": "error", "error": str(exc)}
+    return _futures().place_order(
+        cfg, ex, symbol=symbol, side=side, quantity=qty_value, order_type=type_clean,
+        stop_loss=stop_loss, take_profit=take_profit, leverage=leverage, reduce_only=reduce_only,
+    )
+
+
 # ---------------------------------------------------------------------------
 # SDK plumbing
 # ---------------------------------------------------------------------------
+
+
+def _futures() -> ModuleType:
+    """Import the futures module lazily; it imports helpers from this one."""
+    from src.trading.connectors.binance import futures
+
+    return futures
 
 
 def _require_ccxt() -> ModuleType:
@@ -835,12 +940,14 @@ def _public_exchange(cfg: BinanceConfig):
     CCXT otherwise loads Binance currencies through a signed SAPI request when
     market loading sees an API key, even for an ordinary public ticker.
     """
-    return _exchange(replace(cfg, api_key="", api_secret=""))
+    return _exchange(replace(cfg, api_key="", api_secret="", futures_api_key="", futures_api_secret=""))
 
 
 def _exchange(cfg: BinanceConfig):
     """Build a ccxt Binance client bound to the configured market/environment."""
     ccxt = _require_ccxt()
+    if cfg.futures:
+        return _futures_exchange(cfg, ccxt)
     client_config: dict[str, Any] = {
         "apiKey": cfg.api_key,
         "secret": cfg.api_secret,
@@ -883,14 +990,60 @@ def _exchange(cfg: BinanceConfig):
     return ex
 
 
+def _futures_exchange(cfg: BinanceConfig, ccxt: ModuleType):
+    """Build a ccxt USD-M client and verify every futures endpoint's host.
+
+    Reading the client's own ``fapi*`` URLs (not the declared host) catches a
+    sandbox switch that did not apply, so a paper intent never reaches
+    ``fapi.binance.com``.
+    """
+    api_key, api_secret = cfg.futures_credentials()
+    client_config: dict[str, Any] = {
+        "apiKey": api_key,
+        "secret": api_secret,
+        "enableRateLimit": True,
+        "timeout": int(cfg.timeout * 1000),
+        "options": {"adjustForTimeDifference": True, "recvWindow": 10_000},
+    }
+    system_proxies = getproxies()
+    proxies = {
+        scheme: str(system_proxies[scheme]).strip()
+        for scheme in ("http", "https")
+        if str(system_proxies.get(scheme) or "").strip()
+    }
+    if proxies:
+        client_config["proxies"] = proxies
+    ex = ccxt.binanceusdm(client_config)
+    ex.set_sandbox_mode(cfg.is_testnet)
+    expected = urlparse(cfg.host).hostname
+    urls = _obj_get(ex, "urls", {}).get("api", {}) if isinstance(_obj_get(ex, "urls", {}), Mapping) else {}
+    futures_urls = {name: url for name, url in urls.items() if str(name).startswith("fapi")}
+    if not futures_urls:
+        raise BinanceConfigError("Binance futures client exposes no fapi endpoints to verify")
+    for name, url in futures_urls.items():
+        host = (urlparse(str(url)).hostname or "").lower()
+        if host != expected:
+            raise BinanceConfigError(
+                f"Configured profile is {cfg.environment}, but the '{name}' endpoint resolves to "
+                f"'{host}' instead of '{expected}'."
+            )
+    return ex
+
+
 def _assert_host(cfg: BinanceConfig) -> None:
     """Fail closed when the resolved host does not match the declared environment.
 
     The host is the authoritative discriminator: testnet keys cannot reach the
     live host. A live profile must resolve to ``api.binance.com``; a paper
-    profile must resolve to the configured testnet host.
+    profile must resolve to the configured testnet host. A futures profile
+    must resolve to the futures testnet or ``fapi.binance.com``.
     """
     host = (urlparse(cfg.host).hostname or cfg.host or "").lower()
+    if cfg.futures:
+        expected_url = FUTURES_TESTNET_HOST if cfg.is_testnet else USDM_LIVE_HOST
+        if host != urlparse(expected_url).hostname:
+            raise BinanceConfigError(f"futures profile resolves to '{host}', not '{expected_url}'.")
+        return
     if cfg.is_testnet:
         expected = (urlparse(cfg.testnet_host).hostname or cfg.testnet_host or "").lower()
         if host != expected:
@@ -907,10 +1060,11 @@ def _assert_host(cfg: BinanceConfig) -> None:
 
 
 def _missing_fields(cfg: BinanceConfig) -> list[str]:
+    api_key, api_secret = cfg.futures_credentials() if cfg.futures else (cfg.api_key, cfg.api_secret)
     missing = []
-    if not cfg.api_key:
+    if not api_key:
         missing.append("api_key")
-    if not cfg.api_secret:
+    if not api_secret:
         missing.append("api_secret")
     return missing
 
@@ -918,9 +1072,11 @@ def _missing_fields(cfg: BinanceConfig) -> list[str]:
 def _public_config(cfg: BinanceConfig) -> dict[str, Any]:
     """Config snapshot with secrets redacted."""
     data = asdict(cfg)
-    if data.get("api_secret"):
-        data["api_secret"] = "***redacted***"
-    if data.get("api_key"):
-        data["api_key"] = data["api_key"][:4] + "***"
+    for secret in ("api_secret", "futures_api_secret"):
+        if data.get(secret):
+            data[secret] = "***redacted***"
+    for key in ("api_key", "futures_api_key"):
+        if data.get(key):
+            data[key] = data[key][:4] + "***"
     data["host"] = cfg.host
     return data

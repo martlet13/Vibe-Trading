@@ -742,7 +742,10 @@ class TradingPlaceOrderTool(BaseTool):
         "Place an order through the selected trading connector profile. Paper "
         "profiles trade a sandbox account; live profiles are gated by the user's "
         "mandate and kill switch. side is 'buy' or 'sell'; give exactly one of "
-        "quantity (units) or notional (account-currency amount)."
+        "quantity (units) or notional (account-currency amount). Futures profiles "
+        "(*-futures-*) take quantity only, run on isolated margin at leverage 1-5, "
+        "and refuse any order that opens or adds to a position without both "
+        "stop_loss and take_profit; set reduce_only to close exposure instead."
     )
     parameters = {
         "type": "object",
@@ -761,6 +764,24 @@ class TradingPlaceOrderTool(BaseTool):
             "order_type": {"type": "string", "enum": ["market", "limit"], "default": "market"},
             "limit_price": {"type": "number", "description": "Required for limit orders."},
             "time_in_force": {"type": "string", "enum": ["day", "gtc"], "default": "day"},
+            "stop_loss": {
+                "type": "number",
+                "description": "Futures only: stop-loss trigger price. Required with take_profit for every new position.",
+            },
+            "take_profit": {
+                "type": "number",
+                "description": "Futures only: take-profit trigger price. Required with stop_loss for every new position.",
+            },
+            "leverage": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5,
+                "description": "Futures only: isolated-margin leverage, 1-5. Defaults to 1.",
+            },
+            "reduce_only": {
+                "type": "boolean",
+                "description": "Futures only: the order may only shrink an existing position (no stop_loss/take_profit).",
+            },
         },
         "required": ["symbol", "side"],
     }
@@ -782,6 +803,12 @@ class TradingPlaceOrderTool(BaseTool):
             quantity = _num_or_none(kwargs.get("quantity"), "quantity") or None
             notional = _num_or_none(kwargs.get("notional"), "notional") or None
             limit_price = _num_or_none(kwargs.get("limit_price"), "limit_price")
+            stop_loss = _num_or_none(kwargs.get("stop_loss"), "stop_loss")
+            take_profit = _num_or_none(kwargs.get("take_profit"), "take_profit")
+            leverage = _num_or_none(kwargs.get("leverage"), "leverage")
+            reduce_only = kwargs.get("reduce_only", False)
+            if not isinstance(reduce_only, bool):
+                raise InvalidTradingArgument("reduce_only must be true or false.")
             overrides = _overrides(kwargs)
         except InvalidTradingArgument as exc:
             return _json_result({"status": "error", "error": str(exc)})
@@ -797,6 +824,10 @@ class TradingPlaceOrderTool(BaseTool):
                     order_type=str(kwargs.get("order_type") or "market"),
                     limit_price=limit_price,
                     time_in_force=str(kwargs.get("time_in_force") or "day"),
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                    leverage=leverage,
+                    reduce_only=reduce_only,
                     **overrides,
                 )
             )

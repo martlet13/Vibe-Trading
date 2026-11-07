@@ -20,9 +20,14 @@ BINANCE_TOOL_CLASS: dict[str, ToolClass] = {
     "fetch_tickers": ToolClass.READ,
     "fetch_ohlcv": ToolClass.READ,
     "load_markets": ToolClass.READ,
+    "fetch_positions": ToolClass.READ,
+    "fetch_margin_mode": ToolClass.READ,
+    "fetch_leverage": ToolClass.READ,
     "fapiprivatev2_get_account": ToolClass.READ,
     "fapiprivatev3_get_positionrisk": ToolClass.READ,
     # WRITE
     "create_order": ToolClass.WRITE,
     "cancel_order": ToolClass.WRITE,
+    "set_margin_mode": ToolClass.WRITE,
+    "set_leverage": ToolClass.WRITE,
 }
