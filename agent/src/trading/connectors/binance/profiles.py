@@ -1,7 +1,8 @@
 """Built-in Binance connector profiles.
 
 Read-only paper (testnet) and live profiles plus order-placing paper and live
-profiles. Paper and live use different key pairs and different hosts, so they
+profiles for spot, and order-placing paper and live profiles for USD-M
+perpetuals (``futures``). Paper and live use different key pairs and different hosts, so they
 are distinct profiles. The order-placing live profile carries an
 ``orders.place.requires_mandate`` capability — the higher trading layer must
 gate it behind the user's mandate before any order reaches the connector.
@@ -69,6 +70,41 @@ BINANCE_PROFILES: tuple[TradingProfile, ...] = (
             "Places and cancels orders on a Binance spot live account (api.binance.com) "
             "via ccxt. Live order placement must be gated by the user's mandate; the "
             "orders.place.requires_mandate capability signals that requirement upstream."
+        ),
+    ),
+    TradingProfile(
+        id="binance-futures-paper-trade",
+        connector="binance",
+        label="Binance USDT Perpetuals Testnet · ccxt Trading",
+        environment="paper",
+        transport="broker_sdk",
+        capabilities=READ_CAPABILITIES + ("orders.place",),
+        readonly=False,
+        config={"profile": "paper", "futures": True},
+        notes=(
+            "Trades Binance USDT perpetuals on the testnet (testnet.binancefuture.com). "
+            "USDT-margined perpetuals only, on isolated margin at 1-5x; every new "
+            "position carries a stop-loss and a take-profit or the order is refused."
+            " Entries are market orders; protection follows as reduce-only conditional "
+            "orders and the entry is closed at market if either is refused."
+        ),
+    ),
+    TradingProfile(
+        id="binance-futures-live-trade",
+        connector="binance",
+        label="Binance USDT Perpetuals Live · ccxt Trading",
+        environment="live",
+        transport="broker_sdk",
+        capabilities=READ_CAPABILITIES + ("orders.place.requires_mandate",),
+        readonly=False,
+        config={"profile": "live", "futures": True},
+        notes=(
+            "Trades Binance USDT perpetuals on the live account (fapi.binance.com) behind the "
+            "user's mandate and kill switch. USDT-margined perpetuals only, on isolated "
+            "margin at 1-5x; every new position carries a stop-loss and a take-profit or "
+            "the order is refused."
+            " Entries are market orders; protection follows as reduce-only conditional "
+            "orders and the entry is closed at market if either is refused."
         ),
     ),
 )

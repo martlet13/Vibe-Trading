@@ -918,6 +918,7 @@ def _normalize_notional(intent: OrderIntent, connector_module: Any, config: Any)
         quantity=intent.quantity,
         instrument_type=intent.instrument_type,
         asset_class=intent.asset_class,
+        margined=intent.margined,
     )
 
 
