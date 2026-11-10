@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from mcp.types import ToolAnnotations
 
 from src.live.classification import ToolClass, classify_tool
@@ -69,3 +70,10 @@ def test_ibkr_sparse_map_pins_known_order_names_write() -> None:
     """IBKR read names are annotation-discovered, but order names stay WRITE."""
     assert classify_tool("place_order", None, IBKR_TOOL_CLASS) is ToolClass.WRITE
     assert classify_tool("cancelOrder", ToolAnnotations(readOnlyHint=True), IBKR_TOOL_CLASS) is ToolClass.WRITE
+
+
+@pytest.mark.parametrize("name", ["create_order_instruction", "delete_order_instruction"])
+def test_ibkr_official_order_instruction_tools_are_write_even_if_annotated_read_only(name) -> None:
+    """The official IBKR MCP order tools never classify READ, whatever the annotation says."""
+    assert classify_tool(name, None, IBKR_TOOL_CLASS) is ToolClass.WRITE
+    assert classify_tool(name, ToolAnnotations(readOnlyHint=True), IBKR_TOOL_CLASS) is ToolClass.WRITE

@@ -51,6 +51,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   public ticker read, a stablecoin balance as cash at zero exposure. A
   holding with no USDT price is still left unvalued, so the gate keeps
   refusing until it is sold or priced, and the read says which asset it is.
+- **IBKR order instructions are always write actions**. The official IBKR MCP
+  server stages orders with `create_order_instruction` and removes them with
+  `delete_order_instruction`. Both were classified only from the server's own
+  annotations; they are now pinned WRITE in the IBKR catalog, so the live
+  gate treats them as orders even if the server ever marks them read-only.
 
 #### Backtest runner, engines and metrics
 
