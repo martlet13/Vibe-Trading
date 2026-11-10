@@ -23,4 +23,9 @@ IBKR_TOOL_CLASS: dict[str, ToolClass] = {
     "modifyOrder": ToolClass.WRITE,
     "replace_order": ToolClass.WRITE,
     "replaceOrder": ToolClass.WRITE,
+    # The official IBKR MCP server's order tools. An order instruction stages
+    # an order on the account, so it is pinned WRITE even if the server ever
+    # annotates it read-only.
+    "create_order_instruction": ToolClass.WRITE,
+    "delete_order_instruction": ToolClass.WRITE,
 }
