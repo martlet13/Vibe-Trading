@@ -7,6 +7,19 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **TradingView signals for the agent (AI Agent Lens)**. `vibe-trading
+  tradingview serve` runs a small webhook receiver for the open-source AI
+  Agent Lens indicator, which posts one JSON packet per closed candle, and the
+  read-only `tradingview_signals` agent tool lists the charts that reported,
+  returns the newest packet of a chart with its age in closed candles, or a
+  compact history. The receiver is separate from the API server, so a tunnel
+  exposes only `POST /webhook`; it needs a token of at least 16 characters
+  (`TRADINGVIEW_WEBHOOK_TOKEN` or `--token`), binds to loopback and never logs
+  the token. A packet is accepted only as `ai-agent-lens/v1`, up to 64 KB,
+  with finite numbers and strings limited to the schema's character set, so
+  it cannot carry text for the model. Nothing in this path places an order;
+  orders still go through the trading tools and the mandate gate.
+
 - **USDT perpetual futures on Binance and Bybit, protected on every order**.
   `binance-futures-paper-trade` / `binance-futures-live-trade` and
   `bybit-futures-paper-trade` / `bybit-futures-live-trade` trade USDT-margined

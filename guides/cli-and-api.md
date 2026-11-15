@@ -186,6 +186,56 @@ Saves write the `channels.<name>` section of `~/.vibe-trading/agent.json` atomic
 
 </details>
 
+## 📡 TradingView signals (AI Agent Lens)
+
+[AI Agent Lens](https://github.com/roan-maverick/tradingview-indicator-for-ai-agents)
+(MIT) is a TradingView indicator that posts one JSON packet per closed candle:
+candle anatomy, regime, trend, momentum, structure, key levels, long/short
+scores and its own entry, stop and targets. `vibe-trading tradingview serve`
+receives those packets, and the agent reads them with the read-only
+`tradingview_signals` tool.
+
+```bash
+vibe-trading tradingview new-token            # prints a random token
+# put it in ~/.vibe-trading/.env as TRADINGVIEW_WEBHOOK_TOKEN=<token>
+vibe-trading tradingview serve                # http://127.0.0.1:8787/webhook
+cloudflared tunnel --url http://localhost:8787   # any HTTPS tunnel works
+```
+
+In TradingView add the indicator, create one alert per chart with condition
+**Any alert() function call**, and set the webhook URL to
+`https://<tunnel>/webhook?token=<token>`. Webhook alerts need a paid
+TradingView plan with two-factor authentication.
+
+```bash
+vibe-trading tradingview charts               # charts that have reported
+vibe-trading tradingview latest BINANCE:BTCUSDT.P 60
+```
+
+Then ask the agent, for example: "Read the latest TradingView packet for
+BINANCE:BTCUSDT.P on 60 and tell me whether the setup is worth taking on
+binance-paper-trade."
+
+What the receiver does and does not do:
+
+- It is a separate server on its own port, with only `GET /health` and
+  `POST /webhook`. Do not tunnel the API server's port instead: the API trusts
+  loopback clients, and a tunnel makes every visitor one.
+- It refuses to start without a token of at least 16 characters, binds to
+  loopback by default, compares the token in constant time and never logs a
+  request line (the token is in the URL, because TradingView cannot send
+  headers).
+- A packet must be `ai-agent-lens/v1`, at most 64 KB, with finite numbers and
+  strings made only of the characters the schema's enums, symbols and
+  timestamps use (no spaces), so it cannot carry prose. Unknown top-level
+  fields are dropped; anything else malformed is rejected.
+- Packets are kept under `~/.vibe-trading/tradingview/`: the newest per chart
+  in `latest/`, and all of them in `history.jsonl` (rotated once at 8 MB).
+- Nothing here places an order. The tool returns the packet as third-party
+  indicator output with its age in closed candles; an order the agent then
+  proposes still goes through the trading tools, the mandate and the kill
+  switch, and for futures the stop-loss and take-profit rule.
+
 ## 🌐 API Server
 
 ```bash

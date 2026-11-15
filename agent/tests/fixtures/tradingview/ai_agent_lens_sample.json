@@ -1,0 +1,65 @@
+{
+  "schema": "ai-agent-lens/v1",
+  "event": "LONG_SETUP",
+  "symbol": "BINANCE:HYPEUSDT.P",
+  "timeframe": "60",
+  "time": "2026-11-13T09:00:00Z",
+  "state_code": "LENS|HYPEUSDT.P|60|TREND_UP|L92|S0|LONG:ACTIVE",
+  "candle": {
+    "open": 70.15,
+    "high": 70.94,
+    "low": 70.05,
+    "close": 70.71,
+    "volume": 412850.2,
+    "direction": "bull",
+    "body_pct": 62.9,
+    "upper_wick_pct": 25.8,
+    "lower_wick_pct": 11.2,
+    "range_atr": 1.61,
+    "close_position_pct": 74.2,
+    "gap_pct": -0.014,
+    "closed_above_prev_high": true,
+    "closed_below_prev_low": false,
+    "pattern": "BULLISH_ENGULFING"
+  },
+  "recent_candles": [
+    {"bars_ago": 4, "o": 69.71, "h": 70.12, "l": 69.6, "c": 70.02, "v": 251004.7, "dir": "bull", "body_pct": 59.6, "range_atr": 0.94, "pattern": "NONE"},
+    {"bars_ago": 3, "o": 70.02, "h": 70.38, "l": 69.88, "c": 70.31, "v": 268311.9, "dir": "bull", "body_pct": 58, "range_atr": 0.9, "pattern": "NONE"},
+    {"bars_ago": 2, "o": 70.31, "h": 70.37, "l": 70.25, "c": 70.35, "v": 190220.4, "dir": "bull", "body_pct": 33.3, "range_atr": 0.22, "pattern": "INSIDE_BAR"},
+    {"bars_ago": 1, "o": 70.4, "h": 70.52, "l": 70.08, "c": 70.16, "v": 233918.1, "dir": "bear", "body_pct": 54.5, "range_atr": 0.8, "pattern": "BEARISH_ENGULFING"},
+    {"bars_ago": 0, "o": 70.15, "h": 70.94, "l": 70.05, "c": 70.71, "v": 412850.2, "dir": "bull", "body_pct": 62.9, "range_atr": 1.61, "pattern": "BULLISH_ENGULFING"}
+  ],
+  "regime": "TREND_UP",
+  "trend": {
+    "ema_fast": 70.22,
+    "ema_mid": 69.64,
+    "ema_slow": 68.1,
+    "stack": "BULLISH",
+    "slow_slope": "RISING",
+    "htf": "240",
+    "htf_bias": "UP"
+  },
+  "momentum": {"rsi": 61.4, "macd_hist": 0.0412, "macd_hist_rising": true},
+  "strength": {"adx": 26.4, "di_plus": 29.8, "di_minus": 15.2},
+  "volatility": {"atr": 0.552, "atr_percentile": 61},
+  "volume": {"relative": 1.31},
+  "structure": {"bias": "BULLISH", "event": "BREAK_UP", "last_swing_high": 70.48, "last_swing_low": 69.21},
+  "levels": {"prev_day_high": 74.2, "prev_day_low": 69.52, "vwap": 70.31},
+  "scores": {
+    "long": 92,
+    "short": 0,
+    "threshold": 70,
+    "long_factors": {"trend": 20, "momentum": 20, "strength": 20, "volume": 12, "htf": 20},
+    "short_factors": {"trend": 0, "momentum": 0, "strength": 0, "volume": 0, "htf": 0}
+  },
+  "trade": {
+    "side": "LONG",
+    "status": "ACTIVE",
+    "entry": 70.71,
+    "stop": 69.882,
+    "target_1": 71.952,
+    "target_2": 73.194,
+    "bars_since_entry": 0
+  },
+  "last_setup": {"side": "LONG", "bars_ago": 0}
+}

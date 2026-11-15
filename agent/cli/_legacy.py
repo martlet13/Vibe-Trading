@@ -5802,6 +5802,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     from cli.commands.paper_trade import add_parser as add_paper_parser
     add_paper_parser(subparsers)
+
+    from cli.commands.tradingview import add_parser as add_tradingview_parser
+    add_tradingview_parser(subparsers)
     return parser
 
 
@@ -6720,6 +6723,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "paper":
         from cli.commands.paper_trade import dispatch as dispatch_paper
         return dispatch_paper(args)
+    if args.command == "tradingview":
+        from cli.commands.tradingview import dispatch as dispatch_tradingview
+        return dispatch_tradingview(args)
     if args.command == "portfolio":
         return _coerce_exit_code(_dispatch_portfolio(args))
     if args.command == "connector":
