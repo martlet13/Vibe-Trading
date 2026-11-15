@@ -380,6 +380,9 @@ class APIConfig(_EnvBase):
     vibe_trading_mcp_allowed_hosts: str = Field(
         alias="VIBE_TRADING_MCP_ALLOWED_HOSTS", default="",
     )
+    # Shared secret TradingView sends as ?token= to `vibe-trading tradingview
+    # serve`. The receiver refuses to start without one.
+    tradingview_webhook_token: str = Field(alias="TRADINGVIEW_WEBHOOK_TOKEN", default="")
     enable_session_runtime: EnvBool = Field(alias="ENABLE_SESSION_RUNTIME", default=True)
     vibe_trading_trust_docker_loopback: EnvBool = Field(
         alias="VIBE_TRADING_TRUST_DOCKER_LOOPBACK", default=False,
