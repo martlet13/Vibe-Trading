@@ -19,6 +19,7 @@ export const SUPPORTED_LANGUAGES = [
   { code: "pt-BR", label: "Português (Brasil)", dir: "ltr" as const },
   { code: "id", label: "Bahasa Indonesia", dir: "ltr" as const },
   { code: "tr", label: "Türkçe", dir: "ltr" as const },
+  { code: "uk", label: "Українська", dir: "ltr" as const },
 ] as const;
 
 export type SupportedLanguageCode = (typeof SUPPORTED_LANGUAGES)[number]["code"];
@@ -35,6 +36,7 @@ const localeLoaders = {
   "pt-BR": () => import("./locales/pt-BR.json"),
   id: () => import("./locales/id.json"),
   tr: () => import("./locales/tr.json"),
+  uk: () => import("./locales/uk.json"),
 } satisfies Record<LazyLanguageCode, () => Promise<{ default: typeof en }>>;
 
 const LANGUAGE_STORAGE_KEY = "i18nextLng";

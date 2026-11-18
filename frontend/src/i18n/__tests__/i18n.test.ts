@@ -159,7 +159,7 @@ describe("i18n utilities", () => {
     // the order the switcher renders, and that "en" stays first so the
     // primary-match fallback in Layout resolves regional codes to it.
     const codes = SUPPORTED_LANGUAGES.map((l) => l.code);
-    expect(codes).toEqual(["en", "zh-CN", "ja", "ko", "ar", "fa", "es", "de", "pt-BR", "id", "tr"]);
+    expect(codes).toEqual(["en", "zh-CN", "ja", "ko", "ar", "fa", "es", "de", "pt-BR", "id", "tr", "uk"]);
   });
 
   it("accepts zh-CN as an explicit supported language", async () => {
@@ -191,7 +191,17 @@ describe("new locale content", () => {
     expect(copied).toEqual([]);
   });
 
-  it.each(["tr", "fa"])("%s has no UTF-8 text decoded as Windows-1252", (code) => {
+  it("Ukrainian translates UI text instead of copying English", () => {
+    // Domain terms, tickers and product names stay in Latin script in Ukrainian UI too.
+    const copied = Object.entries(collectStrings(locales.uk)).filter(([key, value]) => (
+      key !== "app.version" && value === enStrings[key] && /[A-Za-z]{3}/.test(value.replace(/\{\{.*?\}\}/g, ""))
+    ));
+    // Under 3% of the strings may be such shared terms; a copied locale would be ~100%.
+    expect(copied.length).toBeLessThan(Object.keys(enStrings).length * 0.03);
+    expect(collectStrings(locales.uk)["layout.newChat"]).toBe("Новий чат");
+  });
+
+  it.each(["tr", "fa", "uk"])("%s has no UTF-8 text decoded as Windows-1252", (code) => {
     const broken = Object.entries(collectStrings(locales[code]))
       .filter(([, value]) => /â€|Ã|Â|\uFFFD/.test(value)).map(([key]) => key);
     expect(broken).toEqual([]);
