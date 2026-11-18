@@ -224,6 +224,8 @@ _MANIFEST_EXEMPT = frozenset({"run_card.json", "artifacts/metrics.csv", "artifac
 _WRITE_TOOLS = frozenset({"write_file", "edit_file"})
 
 # Columns of a backtest table that name the row's instrument (trades.csv "code").
+#: A column whose header names USD ("Volume 24h in USD", "Price (USD)") holds dollars.
+_TABLE_USD_HEADER = re.compile(r"(?:^|[_(])usd(?:$|[_)])")
 _TABLE_SYMBOL_COLUMNS = frozenset({"symbol", "code", "ticker"})
 
 #: Written by the loop into the active run when it archives a backtest there;
@@ -706,6 +708,8 @@ def _is_price_kind(record: EvidenceRecord) -> bool:
         or _price_field_for_path(record.field) is not None
         or _is_registered_price_indicator(record.tool, record.field)
         or _leaf_name(record.field) in _AMOUNT_FIELDS
+        # A field that names its currency ("volume_24h_in_usd") holds dollars.
+        or (record.currency is not None and _TABLE_USD_HEADER.search(_leaf_name(record.field)) is not None)
     )
 
 
@@ -752,6 +756,54 @@ def _document_percent_cells(text: str) -> str:
             columns = ()
         layout = shape
     return "".join(lines)
+
+
+_TABLE_SEPARATOR_CELL = re.compile(r":?-+:?")
+_TABLE_NUMBER = re.compile(
+    r"([+\-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+\-−]?\.\d+)(?:[eE]([+-]?\d+))?\s*(%?)"
+)
+
+
+_TABLE_SYMBOL_COLUMNS = frozenset({"symbol", "ticker", "pair"})
+_TABLE_QUOTE_CURRENCIES = ("USDT", "USDC", "USD", "EUR", "GBP", "JPY")
+
+
+def _table_quote_currency(symbol: str) -> str | None:
+    """The quote currency a TradingView-style pair ends with ("COINBASE:SOLUSD" → USD)."""
+    pair = symbol.strip().upper().rsplit(":", 1)[-1].removesuffix(".P")
+    for code in _TABLE_QUOTE_CURRENCIES:
+        if pair.endswith(code) and len(pair) > len(code) + 1:
+            return code
+    return None
+
+
+def _pipe_cells(line: str) -> list[str] | None:
+    """The cells of one markdown pipe-table row, or None for any other line."""
+    row = line.strip()
+    if not (row.startswith("|") and row.endswith("|") and len(row) > 1):
+        return None
+    return [cell.strip() for cell in row[1:-1].split("|")]
+
+
+def _table_field_name(header: str) -> str:
+    """A table column header as an evidence field name ("Change %" → "change_%")."""
+    return re.sub(r"[\s.\[\]]+", "_", header.strip()).strip("_").casefold()
+
+
+def _table_number(cell: str) -> tuple[float, bool] | None:
+    """Parse a cell that is exactly one finite number; return ``(value, percent)``."""
+    match = _TABLE_NUMBER.fullmatch(cell.strip())
+    if match is None:
+        return None
+    try:
+        value = float(match.group(1).replace(",", "").replace("−", "-"))
+        if match.group(2):
+            value *= 10.0 ** int(match.group(2))
+    except (ValueError, OverflowError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value, bool(match.group(3))
 
 
 def _document_field(figure: Figure) -> str:
@@ -1433,6 +1485,103 @@ class _EvidenceMixin:
                     visit(item, f"{path}[{index}]", timestamp, declared_currency)
 
         visit(payload, "")
+
+    def _ingest_mcp_text_tables(
+        self,
+        tool_name: str,
+        payload: dict[str, Any],
+        call_id: str,
+    ) -> None:
+        """Record the numeric cells of markdown tables an MCP tool returned as text.
+
+        Many MCP servers (tvscreener among them) answer with ``df.to_markdown()``
+        rather than structured JSON. The numeric-leaf walk only sees the string,
+        so every price, change and volume the model quoted from such a table had
+        no evidence behind it and the gate redacted the lot.
+
+        Only cells of a well-formed pipe table count: a header row, a separator
+        row, then rows with the header's column count. A cell must be exactly one
+        number (thousands commas, exponent and a trailing ``%`` allowed); the
+        column header becomes the field name, so ``Price`` reads as a quote and
+        ``Change %`` as a percentage. Prose around the table records nothing.
+
+        Args:
+            tool_name: The MCP tool's local name (``mcp_<server>_<tool>``).
+            payload: The normalized MCP envelope; its ``text`` holds the table.
+            call_id: The call that showed the table to the model.
+        """
+        text = payload.get("text")
+        if not isinstance(text, str) or "|" not in text:
+            return
+        room = min(_MAX_DOCUMENT_FIGURES, _MAX_GENERIC_EVIDENCE - len(self._evidence))
+        source = str(payload.get("source") or tool_name)
+        table = 0
+        header: list[str] | None = None
+        pending: list[str] | None = None
+        row_index = 0
+        symbol_column: int | None = None
+        for raw_line in text.splitlines():
+            if room <= 0:
+                return
+            cells = _pipe_cells(raw_line)
+            if cells is None:
+                header, pending = None, None
+                continue
+            if header is None:
+                if pending is not None and len(cells) == len(pending) and all(
+                    _TABLE_SEPARATOR_CELL.fullmatch(cell) for cell in cells
+                ):
+                    header = [_table_field_name(name) for name in pending]
+                    symbol_column = next(
+                        (i for i, name in enumerate(header) if name in _TABLE_SYMBOL_COLUMNS),
+                        None,
+                    )
+                    table += 1
+                    row_index = 0
+                else:
+                    pending = cells
+                continue
+            if len(cells) != len(header):
+                header, pending = None, cells
+                continue
+            quote_currency = (
+                _table_quote_currency(cells[symbol_column]) if symbol_column is not None else None
+            )
+            for name, cell in zip(header, cells):
+                if not name:
+                    continue
+                parsed = _table_number(cell)
+                if parsed is None:
+                    continue
+                value, percent = parsed
+                field = name if not percent or name.endswith("%") else f"{name}_%"
+                self._evidence.append(
+                    EvidenceRecord(
+                        call_id=call_id,
+                        tool=tool_name,
+                        symbol=None,
+                        source=source,
+                        timestamp=None,
+                        field=f"table{table}[{row_index}].{field}",
+                        value=value,
+                        status="observed",
+                        # Only a quote is in the pair's quote currency; volume
+                        # counts the base asset and must not read as money.
+                        currency=(
+                            None
+                            if percent
+                            else "USD"
+                            if _TABLE_USD_HEADER.search(field)
+                            else quote_currency
+                            if _price_field_for_path(field) is not None
+                            else None
+                        ),
+                    )
+                )
+                room -= 1
+                if room <= 0:
+                    return
+            row_index += 1
 
     def _ingest_run_dir_ohlc_csvs(self) -> None:
         """Register OHLC rows from per-symbol CSVs the run wrote via bash+yfinance.

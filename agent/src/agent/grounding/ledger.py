@@ -355,6 +355,9 @@ class GroundingLedger(
             self._ingest_document_text(arguments, payload, call_id)
         elif payload is not None:
             self._ingest_generic_numeric(tool_name, arguments, payload, call_id)
+            if tool_name.startswith("mcp_"):
+                # MCP servers often answer with a markdown table as text.
+                self._ingest_mcp_text_tables(tool_name, payload, call_id)
         self.persist()
 
     def validate_final_answer(self, content: str) -> ValidationResult:

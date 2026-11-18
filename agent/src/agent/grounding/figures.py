@@ -113,6 +113,23 @@ _POINT_MARKS = (
 # currency marks. They scale the comparison with evidence and never decide shape.
 _MAGNITUDES = {"K": 1e3, "M": 1e6, "B": 1e9, "千": 1e3, "万": 1e4, "亿": 1e8}
 
+# Cyrillic magnitude words ("98.12 млрд", "321 млн", "5 тис."). Longest first so
+# "млрд" is not read as "млн"; a word counts only when no letter follows it.
+_MAGNITUDE_WORDS = (("трлн", 1e12), ("млрд", 1e9), ("млн", 1e6), ("тис", 1e3))
+
+
+def _magnitude_word(text: str) -> tuple[float, int] | None:
+    """A Cyrillic magnitude word at the start of ``text``: ``(multiplier, length)``."""
+    for word, multiplier in _MAGNITUDE_WORDS:
+        if text.startswith(word):
+            end = len(word)
+            if end < len(text) and text[end].isalpha():
+                return None
+            if text[end : end + 1] == ".":
+                end += 1
+            return multiplier, end
+    return None
+
 # A CJK currency word is at most three characters (人民币); bounding the run
 # keeps 元宵/元件, inside longer CJK runs, from reading as money.
 _MAX_CURRENCY_WORD = 3
@@ -732,6 +749,8 @@ def _parse_value(
     rest = field[token.end :].strip()
     if rest[:1] in _MAGNITUDES and not _is_currency_mark(rest):
         rest = rest[1:].lstrip()
+    elif (word := _magnitude_word(rest)) is not None:
+        rest = rest[word[1] :].lstrip()
     unit, consumed, _ = _percent_mark(rest, 0)
     tail = rest[consumed:].strip()
     if not unit and tail in _MULTIPLE_MARKS:
@@ -1079,6 +1098,9 @@ def magnitude_suffix(text: str, end: int) -> tuple[float, int]:
     start = end
     while start < len(text) and text[start] in " \t\u00a0\u202f\u3000":
         start += 1
+    word = _magnitude_word(text[start : start + 6])
+    if word is not None:
+        return word[0], start + word[1]
     mark = text[start : start + 1]
     if not mark or mark not in _MAGNITUDES:
         return 1.0, end
