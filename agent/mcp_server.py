@@ -2735,6 +2735,7 @@ _MIRRORED_TOOL_SOURCES = (
     ("src.tools.quantlib_tool", "QuantlibCallTool"),
     ("src.tools.cashflow_analytics_tool", "CashFlowPerformanceTool"),
     ("src.tools.orderbook_depth_tool", "OrderBookDepthTool"),
+    ("src.tools.orderflow_tool", "OrderFlowTool"),
     ("src.tools.sentiment_tool", "SentimentTool"),
     ("src.tools.technical_indicator_tool", "TechnicalIndicatorTool"),
     ("src.tools.get_fundamentals_tool", "GetFundamentalsTool"),

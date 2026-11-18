@@ -501,6 +501,15 @@ _REGISTERED_PRICE_INDICATORS: dict[str, tuple[str, ...]] = {
         "indicators.bollinger.middle",
         "indicators.bollinger.lower",
     ),
+    "orderflow": (
+        "data.book.best_bid",
+        "data.book.best_ask",
+        "data.book.mid_price",
+        "data.profile.poc_price",
+        "data.profile.value_area_high",
+        "data.profile.value_area_low",
+        "data.signals.cvd_divergence.price_extreme",
+    ),
 }
 
 
