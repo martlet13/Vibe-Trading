@@ -1936,7 +1936,10 @@
     "timeoutHint": "执行超时。可简化策略或减少资产。",
     "apiFailedHint": "API 请求失败。请稍后重试。",
     "executionFailedHint": "执行失败。请重试。",
-    "retry": "再试一次"
+    "retry": "再试一次",
+    "edit": "编辑",
+    "editSend": "发送",
+    "editCancel": "取消"
   },
   "pineViewer": {
     "pineScript": "Pine Script v6",

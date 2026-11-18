@@ -1904,7 +1904,10 @@
     "timeoutHint": "Zaman aşımı. Stratejiyi sadeleştirin veya daha az varlık kullanın.",
     "apiFailedHint": "API isteği başarısız. Kısa süre sonra yeniden deneyin.",
     "executionFailedHint": "Çalıştırma başarısız. Yeniden deneyin.",
-    "retry": "Yeniden dene"
+    "retry": "Yeniden dene",
+    "edit": "Düzenle",
+    "editSend": "Gönder",
+    "editCancel": "İptal"
   },
   "pineViewer": {
     "pineScript": "Pine Script v6",

@@ -1942,7 +1942,10 @@
     "timeoutHint": "Zeitüberschreitung. Strategie vereinfachen oder weniger Assets verwenden.",
     "apiFailedHint": "API-Anfrage fehlgeschlagen. Kurz erneut versuchen.",
     "executionFailedHint": "Ausführung fehlgeschlagen. Erneut versuchen.",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "edit": "Bearbeiten",
+    "editSend": "Senden",
+    "editCancel": "Abbrechen"
   },
   "pineViewer": {
     "pineScript": "Pine Script v6",

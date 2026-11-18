@@ -1655,6 +1655,13 @@ export function Agent() {
     submitComposerPrompt(userContent);
   }, [status, submitComposerPrompt]);
 
+  // Edit-and-resend: the edited text goes out as a new prompt; the original
+  // message and its answer stay in the session history.
+  const handleEdit = useCallback((_msg: AgentMessage, text: string) => {
+    if (status === "streaming") return;
+    submitComposerPrompt(text);
+  }, [status, submitComposerPrompt]);
+
   const handleContinueActivity = useCallback(() => {
     submitComposerPrompt(t("agent.continuePrompt" as never));
   }, [submitComposerPrompt, t]);
@@ -1940,7 +1947,11 @@ export function Agent() {
                 data-msg-idx={g.msgIdx}
                 className={shouldAnimate ? "msg-enter" : undefined}
               >
-                <MessageBubble msg={g.msg} onRetry={g.msg.type === "error" ? handleRetry : undefined} />
+                <MessageBubble
+                  msg={g.msg}
+                  onRetry={g.msg.type === "error" ? handleRetry : undefined}
+                  onEdit={g.msg.type === "user" && status !== "streaming" ? handleEdit : undefined}
+                />
               </div>
             );
           })}

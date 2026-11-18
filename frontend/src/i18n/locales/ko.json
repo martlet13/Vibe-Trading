@@ -1936,7 +1936,10 @@
     "timeoutHint": "시간이 초과되었습니다. 전략을 단순화하거나 자산 수를 줄여 주세요.",
     "apiFailedHint": "API 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.",
     "executionFailedHint": "실행에 실패했습니다. 다시 시도해 주세요.",
-    "retry": "다시 시도"
+    "retry": "다시 시도",
+    "edit": "편집",
+    "editSend": "보내기",
+    "editCancel": "취소"
   },
   "pineViewer": {
     "pineScript": "Pine Script v6",

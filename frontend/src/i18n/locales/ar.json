@@ -1936,7 +1936,10 @@
     "timeoutHint": "انتهت المهلة. بسّط الاستراتيجية أو استخدم عددًا أقل من الأصول.",
     "apiFailedHint": "فشل طلب API. حاول مرة أخرى بعد قليل.",
     "executionFailedHint": "فشل التنفيذ. حاول مرة أخرى.",
-    "retry": "إعادة المحاولة"
+    "retry": "إعادة المحاولة",
+    "edit": "تعديل",
+    "editSend": "إرسال",
+    "editCancel": "إلغاء"
   },
   "pineViewer": {
     "pineScript": "Pine Script v6",
