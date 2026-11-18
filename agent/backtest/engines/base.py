@@ -532,6 +532,21 @@ def _maybe_enrich_events(
         ) from exc
 
 
+def _maybe_enrich_orderflow(
+    data_map: Dict[str, pd.DataFrame],
+    config: Dict[str, Any],
+) -> Dict[str, pd.DataFrame]:
+    """Attach archived taker order flow (delta, CVD) when ``orderflow`` is configured."""
+    if config.get("orderflow") in (None, False, {}):
+        return data_map
+    from backtest.orderflow_archive import enrich_with_orderflow
+
+    try:
+        return enrich_with_orderflow(data_map, config)
+    except Exception as exc:
+        raise RuntimeError(f"orderflow requested but archive enrichment failed: {exc}") from exc
+
+
 # ─── Base Engine ───
 
 
@@ -1003,6 +1018,7 @@ class BaseEngine(ABC):
             sys.exit(1)
         data_map = _maybe_enrich_fundamentals(data_map, config)
         data_map = _maybe_enrich_events(data_map, config)
+        data_map = _maybe_enrich_orderflow(data_map, config)
         data_map = self.prepare_market_data(data_map)
 
         # 2. Generate signals
