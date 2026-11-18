@@ -1936,7 +1936,10 @@
     "timeoutHint": "タイムアウトしました。戦略を簡略化するか、銘柄数を減らしてください。",
     "apiFailedHint": "API リクエストに失敗しました。しばらくしてから再試行してください。",
     "executionFailedHint": "実行に失敗しました。もう一度お試しください。",
-    "retry": "再試行"
+    "retry": "再試行",
+    "edit": "編集",
+    "editSend": "送信",
+    "editCancel": "キャンセル"
   },
   "pineViewer": {
     "pineScript": "Pine Script v6",

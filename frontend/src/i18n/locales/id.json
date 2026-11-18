@@ -1942,7 +1942,10 @@
     "timeoutHint": "Timeout. Sederhanakan strategi atau gunakan lebih sedikit aset.",
     "apiFailedHint": "Permintaan API gagal. Coba lagi beberapa saat lagi.",
     "executionFailedHint": "Eksekusi gagal. Coba lagi.",
-    "retry": "Coba lagi"
+    "retry": "Coba lagi",
+    "edit": "Edit",
+    "editSend": "Kirim",
+    "editCancel": "Batal"
   },
   "pineViewer": {
     "pineScript": "Pine Script v6",

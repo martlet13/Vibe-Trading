@@ -1,6 +1,6 @@
 import i18n from '@/i18n';
 import { Component, lazy, memo, Suspense, useState, useCallback, type ReactNode } from "react";
-import { XCircle, RefreshCw, Copy, Check, Paperclip, Users, Target, Clock3 } from "lucide-react";
+import { XCircle, RefreshCw, Copy, Check, Paperclip, Users, Target, Clock3, Pencil } from "lucide-react";
 import ReactMarkdown, { type Options as ReactMarkdownOptions } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -191,6 +191,8 @@ function getRetryHint(content: string): string {
 interface Props {
   msg: StoredAgentMessage;
   onRetry?: (msg: AgentMessage) => void;
+  /** Send an edited copy of a user message as a new prompt; omit to hide the edit button. */
+  onEdit?: (msg: AgentMessage, text: string) => void;
 }
 
 function formatElapsed(elapsedMs: number): string {
@@ -201,45 +203,119 @@ function formatElapsed(elapsedMs: number): string {
   return `${minutes}m ${Math.round(seconds % 60)}s`;
 }
 
-export const MessageBubble = memo(function MessageBubble({ msg, onRetry }: Props) {
-  if (msg.type === "user") {
-    const meta = msg.meta;
-    const attachments = meta?.attachments
-      ?? (meta?.attachment ? [meta.attachment] : []);
+function UserBubble({ msg, onEdit }: { msg: StoredAgentMessage; onEdit?: Props["onEdit"] }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(msg.content);
+
+  const startEdit = useCallback(() => {
+    setDraft(msg.content);
+    setEditing(true);
+  }, [msg.content]);
+
+  const send = useCallback(() => {
+    const text = draft.trim();
+    if (!text || !onEdit) return;
+    setEditing(false);
+    onEdit(msg, text);
+  }, [draft, msg, onEdit]);
+
+  if (editing) {
     return (
-      <div className="flex justify-end group">
-        <div dir="auto" className="max-w-[72%] max-h-[40vh] overflow-y-auto break-words rounded-[18px] bg-muted px-4 py-3 text-[15px] text-foreground leading-relaxed whitespace-pre-wrap">
-          {meta && (attachments.length > 0 || meta.swarmMode || meta.goalMode) && (
-            <div className="mb-1.5 flex flex-wrap justify-end gap-1.5 text-[10px] leading-none text-muted-foreground">
-              {attachments.map((attachment, index) => (
-                <span
-                  key={`${attachment.filename}-${index}`}
-                  className="inline-flex max-w-full items-center gap-1 rounded-full bg-background/60 px-2 py-1 text-muted-foreground"
-                  title={i18n.t("agent.attachmentChip" as never)}
-                >
-                  <Paperclip className="h-3 w-3 shrink-0" />
-                  <span className="sr-only">{i18n.t("agent.attachmentChip" as never)}: </span>
-                  <span className="truncate">{attachment.filename}</span>
-                </span>
-              ))}
-              {meta.swarmMode && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-1 text-muted-foreground">
-                  <Users className="h-3 w-3" />
-                  {i18n.t("agent.swarmModeChip" as never)}
-                </span>
-              )}
-              {meta.goalMode && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-1 text-muted-foreground">
-                  <Target className="h-3 w-3" />
-                  {i18n.t("agent.goalModeChip" as never)}
-                </span>
-              )}
-            </div>
-          )}
-          {msg.content}
+      <div className="flex justify-end">
+        <div className="w-full max-w-[72%] space-y-2">
+          <textarea
+            dir="auto"
+            autoFocus
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setEditing(false);
+              } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                send();
+              }
+            }}
+            rows={Math.min(12, Math.max(3, draft.split("\n").length))}
+            aria-label={i18n.t("messageBubble.edit" as never)}
+            className="w-full resize-y rounded-[18px] border border-border bg-muted px-4 py-3 text-[15px] leading-relaxed text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+            >
+              {i18n.t("messageBubble.editCancel" as never)}
+            </button>
+            <button
+              type="button"
+              onClick={send}
+              disabled={!draft.trim()}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              {i18n.t("messageBubble.editSend" as never)}
+            </button>
+          </div>
         </div>
       </div>
     );
+  }
+
+  const meta = msg.meta;
+  const attachments = meta?.attachments
+    ?? (meta?.attachment ? [meta.attachment] : []);
+  return (
+    <div className="flex justify-end items-start gap-1 group">
+      {onEdit && (
+        <button
+          type="button"
+          onClick={startEdit}
+          className="mt-2 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/80 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+          aria-label={i18n.t("messageBubble.edit" as never)}
+          title={i18n.t("messageBubble.edit" as never)}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <div dir="auto" className="max-w-[72%] max-h-[40vh] overflow-y-auto break-words rounded-[18px] bg-muted px-4 py-3 text-[15px] text-foreground leading-relaxed whitespace-pre-wrap">
+        {meta && (attachments.length > 0 || meta.swarmMode || meta.goalMode) && (
+          <div className="mb-1.5 flex flex-wrap justify-end gap-1.5 text-[10px] leading-none text-muted-foreground">
+            {attachments.map((attachment, index) => (
+              <span
+                key={`${attachment.filename}-${index}`}
+                className="inline-flex max-w-full items-center gap-1 rounded-full bg-background/60 px-2 py-1 text-muted-foreground"
+                title={i18n.t("agent.attachmentChip" as never)}
+              >
+                <Paperclip className="h-3 w-3 shrink-0" />
+                <span className="sr-only">{i18n.t("agent.attachmentChip" as never)}: </span>
+                <span className="truncate">{attachment.filename}</span>
+              </span>
+            ))}
+            {meta.swarmMode && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-1 text-muted-foreground">
+                <Users className="h-3 w-3" />
+                {i18n.t("agent.swarmModeChip" as never)}
+              </span>
+            )}
+            {meta.goalMode && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-1 text-muted-foreground">
+                <Target className="h-3 w-3" />
+                {i18n.t("agent.goalModeChip" as never)}
+              </span>
+            )}
+          </div>
+        )}
+        {msg.content}
+      </div>
+    </div>
+  );
+}
+
+export const MessageBubble = memo(function MessageBubble({ msg, onRetry, onEdit }: Props) {
+  if (msg.type === "user") {
+    return <UserBubble msg={msg} onEdit={onEdit} />;
   }
 
   if (msg.type === "answer") {

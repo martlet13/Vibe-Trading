@@ -1942,7 +1942,10 @@
     "timeoutHint": "مهلت تمام شد. استراتژی را ساده‌تر کنید یا دارایی کمتری استفاده کنید.",
     "apiFailedHint": "درخواست API ناموفق بود. اندکی بعد دوباره تلاش کنید.",
     "executionFailedHint": "اجرا ناموفق بود. دوباره تلاش کنید.",
-    "retry": "تلاش دوباره"
+    "retry": "تلاش دوباره",
+    "edit": "ویرایش",
+    "editSend": "ارسال",
+    "editCancel": "لغو"
   },
   "pineViewer": {
     "pineScript": "Pine Script v6",

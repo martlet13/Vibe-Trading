@@ -1942,7 +1942,10 @@
     "timeoutHint": "Tiempo agotado. Simplifica la estrategia o usa menos activos.",
     "apiFailedHint": "La solicitud a la API falló. Intenta de nuevo en breve.",
     "executionFailedHint": "La ejecución falló. Intenta de nuevo.",
-    "retry": "Intentar de nuevo"
+    "retry": "Intentar de nuevo",
+    "edit": "Editar",
+    "editSend": "Enviar",
+    "editCancel": "Cancelar"
   },
   "pineViewer": {
     "pineScript": "Pine Script v6",
